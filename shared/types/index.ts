@@ -235,3 +235,29 @@ export interface ApiError {
 }
 
 export type ApiResponse<T> = ApiSuccess<T> | ApiError;
+
+// Authentication Request & Response Contracts
+export interface LoginRequest {
+  email: string;
+  password?: string;
+  role?: UserRole;
+}
+
+export interface AuthUser {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  department?: string;
+  createdAt?: string;
+}
+
+export interface LoginResponseData {
+  user: User;
+  token: string;
+}
+
+export interface CurrentUserResponseData {
+  user: User;
+}
+

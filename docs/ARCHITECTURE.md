@@ -72,6 +72,30 @@ RoomWise is a smart classroom allocation and disruption recovery system. It allo
 
 ---
 
+## Platform, Authentication & Security Architecture
+
+1. **Stateless Token-Based Authentication:**
+   * Uses HMAC-SHA256 signed JSON Web Tokens (JWT) adhering to standard `Bearer <token>` Authorization headers.
+   * Expiration managed via `JWT_EXPIRES_IN` (default: 1 day).
+   * User role and identity are encoded inside verified token claims.
+
+2. **Server-Authoritative RBAC & Resource Scoping:**
+   * The backend **never trusts a role sent in the request body or parameters by the browser**.
+   * `authenticate` middleware cryptographically verifies the token on every protected endpoint and extracts `req.user`.
+   * `authorizeRoles(...allowedRoles)` enforces role boundaries at the route level.
+   * `authorizeResourceScope(ownerResolver, ...overrideRoles)` enforces resource-level ownership while allowing designated administrator roles to override.
+
+3. **Secure Password Storage & Verification:**
+   * Password hashes are generated and verified using `bcryptjs` with salt round 10.
+   * Passwords and password hashes are never exposed in API responses or logs.
+
+4. **Centralized Error Handling & Environment Validation:**
+   * Environment variables are parsed and strictly validated at server startup using `zod` (`server/src/config/env.ts`).
+   * Errors are routed through `AppError` and normalized by `errorHandler` middleware into the uniform `ApiError` envelope.
+
+
+---
+
 ## Workspace Directory Structure
 
 ```

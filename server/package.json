@@ -9,8 +9,9 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "seed": "tsx src/scripts/seed.ts",
-    "test": "tsx --test \"src/**/*.test.ts\"",
+    "test": "tsx --test src/tests/models.test.ts src/tests/validation.test.ts src/tests/api_auth_rbac.test.ts src/tests/auth_platform.test.ts",
     "type-check": "tsc --noEmit"
+
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

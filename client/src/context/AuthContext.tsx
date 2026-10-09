@@ -81,11 +81,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = () => {
+    api.logout().catch(() => {});
     setUser(null);
     setToken(null);
     localStorage.removeItem('roomwise_auth_token');
     localStorage.removeItem('roomwise_user');
   };
+
 
   const clearError = () => setError(null);
 

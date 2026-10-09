@@ -21,20 +21,45 @@
      ```
    * Update `server/.env` if your local MongoDB port or credentials differ.
 
-3. **Repeatable Database Seeding**
+3. **Environment Variables Reference**
+   | Variable | Description | Default Value |
+   | :--- | :--- | :--- |
+   | `PORT` | Backend Express server port | `5000` |
+   | `NODE_ENV` | Application environment (`development`, `test`, `production`) | `development` |
+   | `CLIENT_URL` | Allowed CORS origin for frontend | `http://localhost:5173` |
+   | `MONGODB_URI` | MongoDB connection string | `mongodb://127.0.0.1:27017/roomwise` |
+   | `JWT_SECRET` | Secret key for signing session tokens | `development_secret_key_change_in_production` |
+   | `JWT_EXPIRES_IN`| Token validity lifespan | `1d` |
+   | `TIMEZONE` | Institution operational timezone | `Asia/Kolkata` |
+
+4. **Repeatable Database Seeding & Demo Accounts**
    Populate MongoDB with realistic synthetic rooms, demo accounts for all 8 roles, schedules, and active closures:
    ```bash
-   npm --prefix server run seed
+   npm run seed
+   # or: npm --prefix server run seed
    ```
    * Default password for all seeded accounts: `DemoPass2026!`
 
-4. **Running Automated Tests**
+   ### 8 Demo Accounts Roster:
+   | Role | Account Email | Department |
+   | :--- | :--- | :--- |
+   | `SYSTEM_ADMIN` | `admin@campus.edu` | IT Administration |
+   | `PRINCIPAL` | `principal@campus.edu` | Executive Administration |
+   | `HOD` | `hod.cs@campus.edu` | Computer Science |
+   | `COE` | `coe.exam@campus.edu` | Examination Cell |
+   | `SECRETARY` | `sec.arts@campus.edu` | Student Affairs |
+   | `EVENT_MANAGER`| `event.mgr@campus.edu` | Campus Cultural Events |
+   | `TUTOR` | `tutor.smith@campus.edu` | Computer Science |
+   | `STUDENT_REP` | `rep.cs1@campus.edu` | Computer Science |
+
+5. **Running Automated Tests**
    Execute independent validator, schema validation, and RBAC authorization tests:
    ```bash
-   npm --prefix server test
+   npm test
+   # or: npm --prefix server test
    ```
 
-5. **Start Development Servers**
+6. **Start Development Servers**
    ```bash
    # In separate terminals:
    npm run dev:server  # Runs Express server at http://localhost:5000
@@ -42,6 +67,7 @@
    ```
    * Backend server: `http://localhost:5000`
    * Frontend Vite app: `http://localhost:5173`
+
 
 ---
 

@@ -197,7 +197,8 @@ export const api = {
 
   getMe: async (): Promise<User> => {
     try {
-      return await request<User>('/auth/me');
+      const res = await request<{ user: User } | User>('/auth/me');
+      return (res && 'user' in res) ? (res as { user: User }).user : (res as User);
     } catch {
       const saved = localStorage.getItem('roomwise_user');
       if (saved) return JSON.parse(saved);
@@ -210,6 +211,18 @@ export const api = {
       };
     }
   },
+
+  logout: async (): Promise<void> => {
+    try {
+      await request<void>('/auth/logout', { method: 'POST' });
+    } catch {
+      // Graceful offline fallback
+    } finally {
+      localStorage.removeItem('roomwise_auth_token');
+      localStorage.removeItem('roomwise_user');
+    }
+  },
+
 
   // 3. Rooms
   getRooms: async (): Promise<Room[]> => {
