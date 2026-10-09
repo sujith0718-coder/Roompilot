@@ -21,7 +21,20 @@
      ```
    * Update `server/.env` if your local MongoDB port or credentials differ.
 
-3. **Start Development Servers**
+3. **Repeatable Database Seeding**
+   Populate MongoDB with realistic synthetic rooms, demo accounts for all 8 roles, schedules, and active closures:
+   ```bash
+   npm --prefix server run seed
+   ```
+   * Default password for all seeded accounts: `DemoPass2026!`
+
+4. **Running Automated Tests**
+   Execute independent validator, schema validation, and RBAC authorization tests:
+   ```bash
+   npm --prefix server test
+   ```
+
+5. **Start Development Servers**
    ```bash
    # In separate terminals:
    npm run dev:server  # Runs Express server at http://localhost:5000

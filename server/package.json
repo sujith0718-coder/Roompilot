@@ -9,7 +9,7 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "type-check": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "vitest run && tsx --test \"src/**/*.test.ts\"",
     "test:watch": "vitest",
     "seed": "tsx src/scripts/seed.ts",
     "demo": "tsx src/scripts/demoRunner.ts"
