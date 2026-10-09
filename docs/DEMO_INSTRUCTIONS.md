@@ -53,5 +53,12 @@ git checkout -b feature/frontend-ui             # Member working on React compon
 ### Git Workflow Guidelines
 * **Never commit `.env` files with secrets.**
 * **Never edit another member's feature files without coordination.**
-* **Run type checks before submitting a Pull Request:** `npm run type-check`
+* **Run tests and type checks before submitting a Pull Request:** `npm test` and `npm run type-check`
 * **Keep Pull Requests focused and small.**
+
+---
+
+## Testing & Judge Demonstration
+* Run all unit and integration tests: `npm test`
+* Run 7-stage automated demo sequence: `npm run demo`
+* Presentation narrative and judge Q&A guide: [DEMO_SCRIPT.md](DEMO_SCRIPT.md)
