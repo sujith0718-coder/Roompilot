@@ -176,23 +176,11 @@ export const api = {
   },
 
   // 2. Auth
-  login: async (email: string, role: UserRole): Promise<{ user: User; token: string }> => {
-    try {
-      return await request<{ user: User; token: string }>('/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({ email, role }),
-      });
-    } catch {
-      const demoUser: User = {
-        id: `usr_${role.toLowerCase()}`,
-        name: `${role.replace('_', ' ')} Demo User`,
-        email,
-        role,
-        department: 'Campus Administration',
-        createdAt: new Date().toISOString(),
-      };
-      return { user: demoUser, token: `mock_jwt_token_${role.toLowerCase()}` };
-    }
+  login: async (email: string, password: string): Promise<{ user: User; token: string }> => {
+    return request<{ user: User; token: string }>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
   },
 
   getMe: async (): Promise<User> => {
