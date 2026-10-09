@@ -21,43 +21,30 @@
      ```
    * Update `server/.env` if your local MongoDB port or credentials differ.
 
-3. **Environment Variables Reference**
-   | Variable | Description | Default Value |
-   | :--- | :--- | :--- |
-   | `PORT` | Backend Express server port | `5000` |
-   | `NODE_ENV` | Application environment (`development`, `test`, `production`) | `development` |
-   | `CLIENT_URL` | Allowed CORS origin for frontend | `http://localhost:5173` |
-   | `MONGODB_URI` | MongoDB connection string | `mongodb://127.0.0.1:27017/roomwise` |
-   | `JWT_SECRET` | Secret key for signing session tokens | `development_secret_key_change_in_production` |
-   | `JWT_EXPIRES_IN`| Token validity lifespan | `1d` |
-   | `TIMEZONE` | Institution operational timezone | `Asia/Kolkata` |
-
-4. **Repeatable Database Seeding & Demo Accounts**
+3. **Repeatable Database Seeding**
    Populate MongoDB with realistic synthetic rooms, demo accounts for all 8 roles, schedules, and active closures:
    ```bash
-   npm run seed
-   # or: npm --prefix server run seed
+   ALLOW_DESTRUCTIVE_SEED=true npm --prefix server run seed
    ```
-   * Default password for all seeded accounts: `DemoPass2026!`
+   * Default password for all seeded accounts: `DemoPass2026!` (development demos only).
+   * The seed script clears existing sample collections before recreating demo data. Set `ALLOW_DESTRUCTIVE_SEED=true` only when you intentionally want to reset the configured development database. Seeding is disabled outside development mode.
 
-   ### 8 Demo Accounts Roster:
-   | Role | Account Email | Department |
-   | :--- | :--- | :--- |
-   | `SYSTEM_ADMIN` | `admin@campus.edu` | IT Administration |
-   | `PRINCIPAL` | `principal@campus.edu` | Executive Administration |
-   | `HOD` | `hod.cs@campus.edu` | Computer Science |
-   | `COE` | `coe.exam@campus.edu` | Examination Cell |
-   | `SECRETARY` | `sec.arts@campus.edu` | Student Affairs |
-   | `EVENT_MANAGER`| `event.mgr@campus.edu` | Campus Cultural Events |
-   | `TUTOR` | `tutor.smith@campus.edu` | Computer Science |
-   | `STUDENT_REP` | `rep.cs1@campus.edu` | Computer Science |
-
-5. **Running Automated Tests**
+4. **Running Automated Tests**
    Execute independent validator, schema validation, and RBAC authorization tests:
    ```bash
-   npm test
-   # or: npm --prefix server test
+   npm --prefix server test
    ```
+
+5. **Environment Variables Reference**
+   | Variable | Purpose |
+   | :--- | :--- |
+   | `PORT` | Backend port (default `5000`) |
+   | `NODE_ENV` | Use `development` locally; seeding is disabled outside development |
+   | `CLIENT_URL` | Allowed frontend origin |
+   | `MONGODB_URI` | MongoDB connection string |
+   | `JWT_SECRET` | Configure an explicit unique secret of at least 32 characters in production |
+   | `JWT_EXPIRES_IN` | JWT lifetime (default `1d`) |
+   | `TIMEZONE` | Institution timezone (default `Asia/Kolkata`) |
 
 6. **Start Development Servers**
    ```bash
@@ -67,7 +54,6 @@
    ```
    * Backend server: `http://localhost:5000`
    * Frontend Vite app: `http://localhost:5173`
-
 
 ---
 
@@ -92,5 +78,12 @@ git checkout -b feature/frontend-ui             # Member working on React compon
 ### Git Workflow Guidelines
 * **Never commit `.env` files with secrets.**
 * **Never edit another member's feature files without coordination.**
-* **Run type checks before submitting a Pull Request:** `npm run type-check`
+* **Run tests and type checks before submitting a Pull Request:** `npm test` and `npm run type-check`
 * **Keep Pull Requests focused and small.**
+
+---
+
+## Testing & Judge Demonstration
+* Run all unit and integration tests: `npm test`
+* Run 7-stage automated demo sequence: `npm run demo`
+* Presentation narrative and judge Q&A guide: [DEMO_SCRIPT.md](DEMO_SCRIPT.md)
