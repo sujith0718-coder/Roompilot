@@ -1,17 +1,15 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useAuth } from '../context/AuthContext';
 import { StatusBadge } from './StatusBadge';
 import { isUsingMockAdapter } from '../api/client';
-import { ALL_USER_ROLES, UserRole } from '../types';
-import { Shield, LogOut, ChevronDown, UserCheck, Menu, Database } from 'lucide-react';
+import { Shield, LogOut, UserCheck, Menu, Database } from 'lucide-react';
 
 interface HeaderProps {
   onToggleSidebar?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
-  const { user, logout, loginAsRole } = useAuth();
-  const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
+  const { user, logout } = useAuth();
 
   return (
     <header className="sticky top-0 z-40 bg-slate-950/90 backdrop-blur-md border-b border-slate-800/80 px-4 sm:px-6 py-3">
@@ -44,7 +42,7 @@ export const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
           </div>
         </div>
 
-        {/* Right Side: Role Selector, Connection Indicator & User Controls */}
+        {/* Right Side: Role Display, Connection Indicator & User Controls */}
         <div className="flex items-center gap-3">
           {/* Adapter Status Indicator */}
           <div className="hidden md:flex items-center gap-2 px-3 py-1 rounded-full bg-slate-900 border border-slate-800 text-[11px] font-mono text-slate-400">
@@ -55,43 +53,12 @@ export const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
             </span>
           </div>
 
-          {/* Role Switcher Dropdown for Testing */}
+          {/* Active User Role Display */}
           {user && (
-            <div className="relative">
-              <button
-                onClick={() => setRoleDropdownOpen(!roleDropdownOpen)}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 hover:border-cyan-500/40 text-xs font-mono text-slate-200 transition-colors"
-              >
-                <UserCheck className="w-3.5 h-3.5 text-cyan-400" />
-                <span className="hidden sm:inline">Switch Role:</span>
-                <StatusBadge role={user.role} size="sm" />
-                <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
-              </button>
-
-              {roleDropdownOpen && (
-                <div className="absolute right-0 mt-2 w-56 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-2 z-50 animate-in fade-in slide-in-from-top-2">
-                  <div className="px-3 py-2 text-[10px] font-mono text-slate-400 uppercase border-b border-slate-800">
-                    Switch Active RBAC Role
-                  </div>
-                  <div className="py-1 space-y-1 max-h-64 overflow-y-auto">
-                    {ALL_USER_ROLES.map((r: UserRole) => (
-                      <button
-                        key={r}
-                        onClick={() => {
-                          loginAsRole(r);
-                          setRoleDropdownOpen(false);
-                        }}
-                        className={`w-full flex items-center justify-between px-3 py-1.5 rounded-xl text-xs font-mono transition-colors ${
-                          user.role === r ? 'bg-cyan-500/10 text-cyan-300 font-semibold' : 'text-slate-300 hover:bg-slate-800'
-                        }`}
-                      >
-                        <span>{r}</span>
-                        {user.role === r && <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs font-mono text-slate-200">
+              <UserCheck className="w-3.5 h-3.5 text-cyan-400" />
+              <span className="hidden sm:inline">Active Role:</span>
+              <StatusBadge role={user.role} size="sm" />
             </div>
           )}
 

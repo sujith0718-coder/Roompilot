@@ -12,6 +12,7 @@ const envSchema = z.object({
   JWT_SECRET: z.string().default('development_jwt_secret_change_in_prod'),
   JWT_EXPIRES_IN: z.string().default('1d'),
   TIMEZONE: z.string().default('Asia/Kolkata'),
+  GEMINI_API_KEY: z.string().optional(),
 });
 
 const parseEnv = () => {

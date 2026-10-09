@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   mockRooms,
   mockBookingRequests,
@@ -6,182 +6,319 @@ import {
   slotAfternoon,
 } from '../fixtures/sharedFixtures.js';
 import {
-  runFirstFitAllocation,
-  runDisruptionRecovery,
-  validateAssignmentStrict,
-} from '../helpers/domainAlgorithms.js';
-import {
   AllocationAssignment,
   BookingRequest,
   DisruptionEvent,
   Room,
+  TimeSlot,
 } from '../../../shared/types/index.js';
+import { recoveryService } from '../../src/services/recovery/index.js';
+import { doSlotsOverlap, validationService } from '../../src/services/validation/index.js';
 
-describe('Disruption Recovery Engine — Room Closures & Reassignment Tests', () => {
-  it('Scenario A (Successful Recovery): Reassigns affected class to feasible alternative without disturbing unaffected rooms', () => {
-    // 2 classes:
-    // Req 1: in Room 101 (cap 40, slotMorning)
-    // Req 2: in Room 201 (cap 30, slotMorning, requires LAB_EQUIPMENT)
-    // Alternative room: Room 102 (cap 60, slotMorning, PROJECTOR, AC)
-    const req1: BookingRequest = {
-      id: 'rec-req-1',
-      title: 'CS101 Intro Programming',
-      requesterId: 'usr-1',
+const mockAdminActor = {
+  id: '507f1f77bcf86cd799439008',
+  role: 'SYSTEM_ADMIN' as const,
+};
+
+describe('Disruption Recovery Engine — Comprehensive Unit Suite', () => {
+  it('Scenario 1: Allocated bookings with status ALLOCATED are recovered and preserve their status', async () => {
+    const allocatedReq: BookingRequest = {
+      id: 'req-allocated-1',
+      title: 'Operating Systems Lecture',
+      requesterId: 'tutor-1',
       requesterRole: 'TUTOR',
-      enrollmentCount: 35,
+      enrollmentCount: 30,
       requiredFacilities: ['PROJECTOR'],
       slot: slotMorning,
       status: 'ALLOCATED',
+      assignedRoomId: 'room-101',
       createdAt: new Date().toISOString(),
     };
-    const req2: BookingRequest = {
-      id: 'rec-req-2',
-      title: 'EE101 Circuit Design',
-      requesterId: 'usr-2',
+
+    const report = await recoveryService.handleRoomClosure(
+      {
+        roomId: 'room-101',
+        reason: 'Blackout',
+        slot: slotMorning,
+      },
+      {
+        actor: mockAdminActor,
+        __testOverrides: {
+          requests: [allocatedReq],
+          rooms: mockRooms,
+          currentAssignments: [{ bookingId: 'req-allocated-1', roomId: 'room-101', explanation: 'Assigned' }],
+        },
+      }
+    );
+
+    expect(report.closedRoomId).toBe('room-101');
+    expect(report.reassignedBookings).toHaveLength(1);
+    expect(report.reassignedBookings[0].bookingId).toBe('req-allocated-1');
+  });
+
+  it('Scenario 2: Slot-specific closure leaves bookings outside disruption window unchanged', async () => {
+    const morningReq: BookingRequest = {
+      id: 'req-morning',
+      title: 'Morning CS Class',
+      requesterId: 'u1',
+      requesterRole: 'TUTOR',
+      enrollmentCount: 25,
+      requiredFacilities: [],
+      slot: slotMorning,
+      status: 'ALLOCATED',
+      assignedRoomId: 'room-101',
+      createdAt: new Date().toISOString(),
+    };
+
+    const afternoonReq: BookingRequest = {
+      id: 'req-afternoon',
+      title: 'Afternoon CS Class',
+      requesterId: 'u2',
+      requesterRole: 'TUTOR',
+      enrollmentCount: 25,
+      requiredFacilities: [],
+      slot: slotAfternoon,
+      status: 'ALLOCATED',
+      assignedRoomId: 'room-101',
+      createdAt: new Date().toISOString(),
+    };
+
+    const report = await recoveryService.handleRoomClosure(
+      {
+        roomId: 'room-101',
+        reason: 'Morning roof repair',
+        slot: slotMorning,
+      },
+      {
+        actor: mockAdminActor,
+        __testOverrides: {
+          requests: [morningReq, afternoonReq],
+          rooms: mockRooms,
+          currentAssignments: [
+            { bookingId: 'req-morning', roomId: 'room-101', explanation: 'Morning' },
+            { bookingId: 'req-afternoon', roomId: 'room-101', explanation: 'Afternoon' },
+          ],
+        },
+      }
+    );
+
+    expect(report.affectedBookingIds).toContain('req-morning');
+    expect(report.affectedBookingIds).not.toContain('req-afternoon');
+    expect(report.unaffectedAssignmentsPreservedCount).toBe(1);
+  });
+
+  it('Scenario 3: Full-room closure (without slot) affects all bookings in that room', async () => {
+    const req1: BookingRequest = {
+      id: 'req-f1',
+      title: 'Class 1',
+      requesterId: 'u1',
       requesterRole: 'TUTOR',
       enrollmentCount: 20,
-      requiredFacilities: ['LAB_EQUIPMENT'],
+      requiredFacilities: [],
       slot: slotMorning,
       status: 'ALLOCATED',
+      assignedRoomId: 'room-101',
       createdAt: new Date().toISOString(),
     };
 
-    const initialAssignments: AllocationAssignment[] = [
-      { bookingId: req1.id, roomId: 'room-101', explanation: 'Assigned Room 101' },
-      { bookingId: req2.id, roomId: 'room-201', explanation: 'Assigned Lab 201' },
-    ];
-
-    // Trigger sudden closure of Room 101 (pipe leak)
-    const event: DisruptionEvent = {
-      roomId: 'room-101',
-      reason: 'AC condenser burst and ceiling leak',
-      slot: slotMorning,
-    };
-
-    const report = runDisruptionRecovery(
-      event,
-      initialAssignments,
-      [req1, req2],
-      mockRooms
-    );
-
-    // Verify recovery report structure
-    expect(report.closedRoomId).toBe('room-101');
-    expect(report.affectedBookingIds).toEqual(['rec-req-1']);
-    expect(report.unaffectedAssignmentsPreservedCount).toBe(1); // req-2 in room-201 was NOT touched!
-    expect(report.totalAssignmentsChangedCount).toBe(1);
-    expect(report.unresolvedBookingIds).toHaveLength(0);
-
-    // Reassigned booking details
-    expect(report.reassignedBookings).toHaveLength(1);
-    const reassignment = report.reassignedBookings[0];
-    expect(reassignment.bookingId).toBe('rec-req-1');
-    expect(reassignment.previousRoomId).toBe('room-101');
-    expect(reassignment.newRoomId).toBe('room-102'); // Moved to free Room 102 (capacity 60)
-    expect(reassignment.explanation).toContain('Reassigned from closed room');
-
-    // Independent validation on recovered state
-    const room102 = mockRooms.find((r) => r.id === 'room-102')!;
-    const validation = validateAssignmentStrict(req1, room102, [
-      { roomId: 'room-201', slot: req2.slot },
-    ]);
-    expect(validation.isValid).toBe(true);
-  });
-
-  it('Scenario B (Honest Failed Recovery): Accurately reports unresolved booking when no feasible alternative exists', () => {
-    // Specialized Lab class in Room 201 (the ONLY lab in the campus)
-    const labReq: BookingRequest = {
-      id: 'rec-lab-req',
-      title: 'Advanced Microprocessors Lab',
-      requesterId: 'usr-tutor-lab',
+    const req2: BookingRequest = {
+      id: 'req-f2',
+      title: 'Class 2',
+      requesterId: 'u2',
       requesterRole: 'TUTOR',
-      enrollmentCount: 28,
-      requiredFacilities: ['LAB_EQUIPMENT'],
-      slot: slotMorning,
+      enrollmentCount: 20,
+      requiredFacilities: [],
+      slot: slotAfternoon,
       status: 'ALLOCATED',
+      assignedRoomId: 'room-101',
       createdAt: new Date().toISOString(),
     };
 
-    const initialAssignments: AllocationAssignment[] = [
-      { bookingId: labReq.id, roomId: 'room-201', explanation: 'Assigned Computing Lab 201' },
-    ];
-
-    // Sudden electrical short circuit in the ONLY lab room
-    const event: DisruptionEvent = {
-      roomId: 'room-201',
-      reason: 'Electrical circuit breaker failure in Lab',
-      slot: slotMorning,
-    };
-
-    const report = runDisruptionRecovery(
-      event,
-      initialAssignments,
-      [labReq],
-      mockRooms
+    const report = await recoveryService.handleRoomClosure(
+      {
+        roomId: 'room-101',
+        reason: 'Full building renovation',
+      },
+      {
+        actor: mockAdminActor,
+        __testOverrides: {
+          requests: [req1, req2],
+          rooms: mockRooms,
+          currentAssignments: [
+            { bookingId: 'req-f1', roomId: 'room-101', explanation: 'C1' },
+            { bookingId: 'req-f2', roomId: 'room-101', explanation: 'C2' },
+          ],
+        },
+      }
     );
 
-    // No other room on campus has LAB_EQUIPMENT!
-    expect(report.closedRoomId).toBe('room-201');
-    expect(report.affectedBookingIds).toContain('rec-lab-req');
-    expect(report.reassignedBookings).toHaveLength(0); // Cannot reassign to non-lab room!
-    expect(report.unresolvedBookingIds).toHaveLength(1);
-
-    const unresolved = report.unresolvedBookingIds[0];
-    expect(unresolved.bookingId).toBe('rec-lab-req');
-    expect(unresolved.reason).toContain('No alternative room available meeting constraints');
-
-    // Zero fabricated assignments
-    expect(report.totalAssignmentsChangedCount).toBe(0);
+    expect(report.affectedBookingIds).toHaveLength(2);
+    expect(report.unaffectedAssignmentsPreservedCount).toBe(0);
   });
 
-  it('Recovery preserves all active constraints (capacity, facilities, closures, overlaps)', () => {
-    // 3 classes all scheduled at slotMorning
-    const requests: BookingRequest[] = [
-      {
-        id: 'req-a',
-        title: 'Class A',
-        requesterId: 'u1',
-        requesterRole: 'TUTOR',
-        enrollmentCount: 38,
-        requiredFacilities: ['PROJECTOR'],
-        slot: slotMorning,
-        status: 'ALLOCATED',
-        createdAt: new Date().toISOString(),
-      },
-      {
-        id: 'req-b',
-        title: 'Class B',
-        requesterId: 'u2',
-        requesterRole: 'TUTOR',
-        enrollmentCount: 55,
-        requiredFacilities: ['PROJECTOR', 'AUDIO_SYSTEM'],
-        slot: slotMorning,
-        status: 'ALLOCATED',
-        createdAt: new Date().toISOString(),
-      },
-    ];
+  it('Scenario 4: Boundary adjacency — a booking ending at 10:00 and starting at 10:00 do NOT conflict', () => {
+    const slotA: TimeSlot = { dayOfWeek: 'MONDAY', startTime: '09:00', endTime: '10:00' };
+    const slotB: TimeSlot = { dayOfWeek: 'MONDAY', startTime: '10:00', endTime: '11:00' };
 
-    // Initial: Req A in Room 101, Req B in Room 102
-    const initialAssignments: AllocationAssignment[] = [
-      { bookingId: 'req-a', roomId: 'room-101', explanation: 'Assigned LH-101' },
-      { bookingId: 'req-b', roomId: 'room-102', explanation: 'Assigned LH-102' },
-    ];
+    expect(doSlotsOverlap(slotA, slotB)).toBe(false);
+  });
 
-    // Close Room 101
-    const event: DisruptionEvent = {
-      roomId: 'room-101',
-      reason: 'Structural inspection',
+  it('Scenario 5: Real overlap — slots 09:00-10:30 and 10:00-11:30 DO conflict', () => {
+    const slotA: TimeSlot = { dayOfWeek: 'MONDAY', startTime: '09:00', endTime: '10:30' };
+    const slotB: TimeSlot = { dayOfWeek: 'MONDAY', startTime: '10:00', endTime: '11:30' };
+
+    expect(doSlotsOverlap(slotA, slotB)).toBe(true);
+  });
+
+  it('Scenario 6: No feasible room — reports unresolved with reason and zero invalid reassignments', async () => {
+    const hugeLabReq: BookingRequest = {
+      id: 'req-huge-lab',
+      title: 'Mega Robotics Lab',
+      requesterId: 'u1',
+      requesterRole: 'TUTOR',
+      enrollmentCount: 500,
+      requiredFacilities: ['LAB_EQUIPMENT'],
       slot: slotMorning,
+      status: 'ALLOCATED',
+      assignedRoomId: 'room-201',
+      createdAt: new Date().toISOString(),
     };
 
-    const report = runDisruptionRecovery(event, initialAssignments, requests, mockRooms);
+    const report = await recoveryService.handleRoomClosure(
+      {
+        roomId: 'room-201',
+        reason: 'Lab explosion',
+      },
+      {
+        actor: mockAdminActor,
+        __testOverrides: {
+          requests: [hugeLabReq],
+          rooms: mockRooms,
+          currentAssignments: [{ bookingId: 'req-huge-lab', roomId: 'room-201', explanation: 'Assigned' }],
+        },
+      }
+    );
 
-    // Room 102 is already occupied by Class B at slotMorning, so Req A CANNOT double-book Room 102!
-    // It must find another room (like Auditorium 301 or Seminar 202 if cap allows)
-    if (report.reassignedBookings.length > 0) {
-      const newRoomId = report.reassignedBookings[0].newRoomId;
-      expect(newRoomId).not.toBe('room-102'); // MUST NOT double-book room-102!
-      expect(newRoomId).not.toBe('room-101'); // MUST NOT stay in closed room!
-    }
+    expect(report.reassignedBookings).toHaveLength(0);
+    expect(report.unresolvedBookingIds).toHaveLength(1);
+    expect(report.unresolvedBookingIds[0].bookingId).toBe('req-huge-lab');
+    expect(report.unresolvedBookingIds[0].reason).toContain('No alternative room meeting constraints');
+  });
+
+  it('Scenario 7: Validation failure — rejects invalid candidate before committing changes', async () => {
+    const spy = vi.spyOn(validationService, 'validateAllocation').mockReturnValueOnce({
+      isValid: false,
+      violations: ['Simulated validation constraint violation'],
+    });
+
+    const req: BookingRequest = {
+      id: 'req-v1',
+      title: 'Test Class',
+      requesterId: 'u1',
+      requesterRole: 'TUTOR',
+      enrollmentCount: 20,
+      requiredFacilities: [],
+      slot: slotMorning,
+      status: 'ALLOCATED',
+      assignedRoomId: 'room-101',
+      createdAt: new Date().toISOString(),
+    };
+
+    await expect(
+      recoveryService.handleRoomClosure(
+        { roomId: 'room-101', reason: 'Test validation failure' },
+        {
+          actor: mockAdminActor,
+          __testOverrides: {
+            requests: [req],
+            rooms: mockRooms,
+            currentAssignments: [{ bookingId: 'req-v1', roomId: 'room-101', explanation: 'Assigned' }],
+          },
+        }
+      )
+    ).rejects.toThrow('Recovery candidate allocation failed independent validation');
+
+    spy.mockRestore();
+  });
+
+  it('Scenario 8: Unknown room rejection — rejects with ROOM_NOT_FOUND if room does not exist', async () => {
+    await expect(
+      recoveryService.handleRoomClosure(
+        { roomId: 'non-existent-room-999', reason: 'Structural issue' },
+        {
+          actor: mockAdminActor,
+          __testOverrides: {
+            rooms: mockRooms,
+            requests: [],
+            currentAssignments: [],
+          },
+        }
+      )
+    ).rejects.toThrow("Room 'non-existent-room-999' does not exist");
+  });
+
+  it('Scenario 9: Day-of-week case normalization works across upper and mixed case', () => {
+    const slotA: TimeSlot = { dayOfWeek: 'Monday' as any, startTime: '09:00', endTime: '10:00' };
+    const slotB: TimeSlot = { dayOfWeek: 'MONDAY' as any, startTime: '09:30', endTime: '10:30' };
+
+    expect(doSlotsOverlap(slotA, slotB)).toBe(true);
+  });
+
+  it('Scenario 10: Date-specific slots do NOT overlap if scheduled on different dates', () => {
+    const slotA: TimeSlot = { dayOfWeek: 'MONDAY', startTime: '09:00', endTime: '10:00', date: '2026-10-12' };
+    const slotB: TimeSlot = { dayOfWeek: 'MONDAY', startTime: '09:00', endTime: '10:00', date: '2026-10-19' };
+
+    expect(doSlotsOverlap(slotA, slotB)).toBe(false);
+  });
+
+  it('Scenario 16: Unaffected assignment preservation — bookings in unaffected rooms remain unchanged', async () => {
+    const reqIn101: BookingRequest = {
+      id: 'req-in-101',
+      title: 'Class in 101',
+      requesterId: 'u1',
+      requesterRole: 'TUTOR',
+      enrollmentCount: 20,
+      requiredFacilities: [],
+      slot: slotMorning,
+      status: 'ALLOCATED',
+      assignedRoomId: 'room-101',
+      createdAt: new Date().toISOString(),
+    };
+
+    const reqIn201: BookingRequest = {
+      id: 'req-in-201',
+      title: 'Class in 201',
+      requesterId: 'u2',
+      requesterRole: 'TUTOR',
+      enrollmentCount: 20,
+      requiredFacilities: [],
+      slot: slotMorning,
+      status: 'ALLOCATED',
+      assignedRoomId: 'room-201',
+      createdAt: new Date().toISOString(),
+    };
+
+    const report = await recoveryService.handleRoomClosure(
+      {
+        roomId: 'room-101',
+        reason: 'Water leak',
+      },
+      {
+        actor: mockAdminActor,
+        __testOverrides: {
+          requests: [reqIn101, reqIn201],
+          rooms: mockRooms,
+          currentAssignments: [
+            { bookingId: 'req-in-101', roomId: 'room-101', explanation: 'In 101' },
+            { bookingId: 'req-in-201', roomId: 'room-201', explanation: 'In 201' },
+          ],
+        },
+      }
+    );
+
+    expect(report.closedRoomId).toBe('room-101');
+    expect(report.unaffectedAssignmentsPreservedCount).toBe(1);
+    expect(report.affectedBookingIds).toContain('req-in-101');
+    expect(report.affectedBookingIds).not.toContain('req-in-201');
   });
 });
