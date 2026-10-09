@@ -184,20 +184,8 @@ export const api = {
   },
 
   getMe: async (): Promise<User> => {
-    try {
-      const res = await request<{ user: User } | User>('/auth/me');
-      return (res && 'user' in res) ? (res as { user: User }).user : (res as User);
-    } catch {
-      const saved = localStorage.getItem('roomwise_user');
-      if (saved) return JSON.parse(saved);
-      return {
-        id: 'usr_admin',
-        name: 'System Admin',
-        email: 'admin@campus.edu',
-        role: 'SYSTEM_ADMIN',
-        department: 'IT Services',
-      };
-    }
+    const res = await request<{ user: User } | User>('/auth/me');
+    return (res && 'user' in res) ? res.user : res as User;
   },
 
   logout: async (): Promise<void> => {
