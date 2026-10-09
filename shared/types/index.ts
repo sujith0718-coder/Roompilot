@@ -105,7 +105,7 @@ export interface BookingRequest {
   status: BookingStatus;
   assignedRoomId?: string;
   unassignedReason?: string;
-  createdAt: string;
+  createdAt?: string;
 }
 
 // Hard Constraint Validation Result
@@ -147,6 +147,7 @@ export interface UnassignedBookingDetail {
 }
 
 export interface AllocationResult {
+  runId?: string;
   method: AllocationMethod;
   assignments: AllocationAssignment[];
   unassigned: UnassignedBookingDetail[];
@@ -157,6 +158,7 @@ export interface AllocationResult {
     capacityWasteAverage: number;
     executionTimeMs: number;
   };
+  validation?: HardConstraintValidationResult;
   timestamp: string;
 }
 

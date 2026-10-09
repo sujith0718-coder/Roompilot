@@ -67,3 +67,10 @@ export const validateAllocationSchema = z.object({
   rooms: z.array(z.any()).optional(),
   closures: z.array(z.any()).optional(),
 });
+
+export const runAllocationSchema = z.object({
+  method: z.enum(['FIRST_FIT', 'HEURISTIC']).optional().default('HEURISTIC'),
+  requests: z.array(z.any()).optional(),
+  rooms: z.array(z.any()).optional(),
+  closures: z.array(z.any()).optional(),
+});

@@ -249,5 +249,16 @@ describe('Allocation Engine — 6 Required Constraint Cases & Algorithm Comparis
         firstFitResult.metrics.capacityWasteAverage - heuristicResult.metrics.capacityWasteAverage;
       expect(typeof wasteDifference).toBe('number');
     });
+
+    it('tests AllocationService.runAllocation with independent post-allocation validation attachment', async () => {
+      const { allocationService } = await import('../../src/services/allocation/index.js');
+      const result = await allocationService.runAllocation(sharedRequests, sharedRooms, 'HEURISTIC', { saveRecord: false });
+
+      expect(result.method).toBe('HEURISTIC');
+      expect(result.runId).toBeDefined();
+      expect(result.validation).toBeDefined();
+      expect(result.validation?.isValid).toBe(true);
+      expect(result.assignments.length).toBeGreaterThan(0);
+    });
   });
 });
