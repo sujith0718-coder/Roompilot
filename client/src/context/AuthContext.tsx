@@ -8,33 +8,47 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
-  login: (email: string, role: UserRole) => Promise<void>;
-  loginAsRole: (role: UserRole) => void;
+  login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   clearError: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const DEMO_USERS: Record<UserRole, User> = {
-  TUTOR: { id: 'usr_tutor', name: 'Dr. Alan Turing', email: 'turing@campus.edu', role: 'TUTOR', department: 'Computer Science' },
-  STUDENT_REP: { id: 'usr_srep', name: 'Alex Johnson (Rep)', email: 'alex.rep@campus.edu', role: 'STUDENT_REP', department: 'Information Technology' },
-  EVENT_MANAGER: { id: 'usr_event', name: 'Sarah Jenkins', email: 'events@campus.edu', role: 'EVENT_MANAGER', department: 'Student Affairs' },
-  SECRETARY: { id: 'usr_sec', name: 'Michael Scott', email: 'secretary@campus.edu', role: 'SECRETARY', department: 'Administrative Office' },
-  HOD: { id: 'usr_hod', name: 'Prof. Minerva McGonagall', email: 'hod.cs@campus.edu', role: 'HOD', department: 'Computer Science' },
-  COE: { id: 'usr_coe', name: 'Dr. Charles Xavier', email: 'coe@campus.edu', role: 'COE', department: 'Examination Authority' },
-  PRINCIPAL: { id: 'usr_principal', name: 'Dr. Albus Dumbledore', email: 'principal@campus.edu', role: 'PRINCIPAL', department: 'Executive Directorate' },
-  SYSTEM_ADMIN: { id: 'usr_admin', name: 'Ada Lovelace (SysAdmin)', email: 'admin@campus.edu', role: 'SYSTEM_ADMIN', department: 'IT Infrastructure' },
-};
-
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(() => {
-    const saved = localStorage.getItem('roomwise_user');
-    return saved ? JSON.parse(saved) : DEMO_USERS.SYSTEM_ADMIN; // Default to System Admin for initial review
-  });
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem('roomwise_auth_token') || 'demo_token_admin');
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [user, setUser] = useState<User | null>(null);
+  const [token, setToken] = useState<string | null>(() => localStorage.getItem('roomwise_auth_token'));
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    const restoreSession = async () => {
+      const savedToken = localStorage.getItem('roomwise_auth_token');
+      if (!savedToken) {
+        if (active) setIsLoading(false);
+        return;
+      }
+      try {
+        const currentUser = await api.getMe();
+        if (active) {
+          setUser(currentUser);
+          setToken(savedToken);
+        }
+      } catch {
+        if (active) {
+          setUser(null);
+          setToken(null);
+          localStorage.removeItem('roomwise_auth_token');
+          localStorage.removeItem('roomwise_user');
+        }
+      } finally {
+        if (active) setIsLoading(false);
+      }
+    };
+    void restoreSession();
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     if (user) {
@@ -52,42 +66,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [token]);
 
-  const login = async (email: string, role: UserRole) => {
+  useEffect(() => {
+    if (token) {
+      localStorage.setItem('roomwise_auth_token', token);
+    } else {
+      localStorage.removeItem('roomwise_auth_token');
+    }
+  }, [token]);
+
+  const login = async (email: string, password: string) => {
     setIsLoading(true);
     setError(null);
     try {
-      const authResult = await api.login(email, role);
+      const authResult = await api.login(email, password);
       setUser(authResult.user);
       setToken(authResult.token);
-    } catch {
-      // Graceful fallback to demo user if backend offline
-      const demoUser = Object.values(DEMO_USERS).find((u) => u.email.toLowerCase() === email.toLowerCase()) || DEMO_USERS[role];
-      setUser(demoUser);
-      setToken(`demo_token_${role.toLowerCase()}`);
-      setError(`Backend offline: Switched to local session for ${demoUser.name} (${role})`);
+    } catch (err) {
+      setUser(null);
+      setToken(null);
+      setError(err instanceof Error ? err.message : 'Unable to sign in. Check your credentials and try again.');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const loginAsRole = (role: UserRole) => {
-    const demoUser = DEMO_USERS[role];
-    setUser(demoUser);
-    const mockToken = `demo_token_${role.toLowerCase()}`;
-    setToken(mockToken);
-    localStorage.setItem('roomwise_auth_token', mockToken);
-    localStorage.setItem('roomwise_user', JSON.stringify(demoUser));
-    setError(null);
-  };
-
   const logout = () => {
-    api.logout().catch(() => {});
+    void api.logout();
     setUser(null);
     setToken(null);
-    localStorage.removeItem('roomwise_auth_token');
-    localStorage.removeItem('roomwise_user');
   };
-
 
   const clearError = () => setError(null);
 
@@ -100,7 +107,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isLoading,
         error,
         login,
-        loginAsRole,
         logout,
         clearError,
       }}
