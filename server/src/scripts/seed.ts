@@ -42,6 +42,7 @@ export const syntheticUsers: SeedUserDefinition[] = [
 ];
 
 export async function runSeed(isStandalone = true): Promise<void> {
+  // Fail closed before exporting demo data or deleting any database collections.
   if (env.NODE_ENV !== 'development') {
     throw new Error('Database seeding is allowed only when NODE_ENV=development.');
   }
