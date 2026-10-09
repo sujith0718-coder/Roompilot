@@ -4,7 +4,7 @@ import app from '../../src/app.js';
 import { testTokens } from '../helpers/testTokens.js';
 
 describe('API Integration — Disruption Recovery Endpoint (/api/v1/recovery/reassign)', () => {
-  it('rejects unauthenticated request with 401 UNAUTHORIZED', async () => {
+  it('Scenario 12: rejects unauthenticated request with 401 UNAUTHORIZED', async () => {
     const res = await request(app)
       .post('/api/v1/recovery/reassign')
       .send({
@@ -19,7 +19,7 @@ describe('API Integration — Disruption Recovery Endpoint (/api/v1/recovery/rea
     expect(res.body.error?.code).toBe('UNAUTHORIZED');
   });
 
-  it('rejects unauthorized role (TUTOR) with 403 FORBIDDEN', async () => {
+  it('Scenario 13: rejects unauthorized role (TUTOR) with 403 FORBIDDEN', async () => {
     const res = await request(app)
       .post('/api/v1/recovery/reassign')
       .set('Authorization', `Bearer ${testTokens.TUTOR}`)
@@ -35,23 +35,41 @@ describe('API Integration — Disruption Recovery Endpoint (/api/v1/recovery/rea
     expect(res.body.error?.code).toBe('FORBIDDEN');
   });
 
-  it('rejects malformed payload (missing reason / invalid roomId) with 400 VALIDATION_ERROR', async () => {
-    const res = await request(app)
+  it('Scenario 14: rejects malformed payload (missing reason / inverted time slot) with 400 VALIDATION_ERROR', async () => {
+    const resShortReason = await request(app)
       .post('/api/v1/recovery/reassign')
       .set('Authorization', `Bearer ${testTokens.SYSTEM_ADMIN}`)
       .send({
         event: {
-          roomId: '',
+          roomId: 'room-101',
           reason: 'No', // Too short (< 3 chars)
         },
       });
 
-    expect(res.status).toBe(400);
-    expect(res.body.success).toBe(false);
-    expect(res.body.error?.code).toBe('VALIDATION_ERROR');
+    expect(resShortReason.status).toBe(400);
+    expect(resShortReason.body.success).toBe(false);
+    expect(resShortReason.body.error?.code).toBe('VALIDATION_ERROR');
+
+    const resInvertedSlot = await request(app)
+      .post('/api/v1/recovery/reassign')
+      .set('Authorization', `Bearer ${testTokens.SYSTEM_ADMIN}`)
+      .send({
+        event: {
+          roomId: 'room-101',
+          reason: 'Valid reason for test',
+          slot: {
+            dayOfWeek: 'Monday',
+            startTime: '11:00',
+            endTime: '09:00', // Inverted time slot
+          },
+        },
+      });
+
+    expect(resInvertedSlot.status).toBe(400);
+    expect(resInvertedSlot.body.error?.code).toBe('VALIDATION_ERROR');
   });
 
-  it('executes disruption recovery for authorized role (SYSTEM_ADMIN) returning 200 OK with RecoveryReport', async () => {
+  it('Scenario 15: executes disruption recovery for authorized role (SYSTEM_ADMIN) returning 200 OK with RecoveryReport', async () => {
     const res = await request(app)
       .post('/api/v1/recovery/reassign')
       .set('Authorization', `Bearer ${testTokens.SYSTEM_ADMIN}`)
@@ -70,5 +88,28 @@ describe('API Integration — Disruption Recovery Endpoint (/api/v1/recovery/rea
     expect(Array.isArray(res.body.data.unresolvedBookingIds)).toBe(true);
     expect(typeof res.body.data.unaffectedAssignmentsPreservedCount).toBe('number');
     expect(typeof res.body.data.totalAssignmentsChangedCount).toBe('number');
+  });
+
+  it('Scenario 11: Controlled parallel recovery requests handle concurrency safely', async () => {
+    const req1 = request(app)
+      .post('/api/v1/recovery/reassign')
+      .set('Authorization', `Bearer ${testTokens.SYSTEM_ADMIN}`)
+      .send({
+        event: { roomId: 'room-101', reason: 'Parallel event 1' },
+      });
+
+    const req2 = request(app)
+      .post('/api/v1/recovery/reassign')
+      .set('Authorization', `Bearer ${testTokens.HOD}`)
+      .send({
+        event: { roomId: 'room-102', reason: 'Parallel event 2' },
+      });
+
+    const [res1, res2] = await Promise.all([req1, req2]);
+
+    expect(res1.status).toBe(200);
+    expect(res2.status).toBe(200);
+    expect(res1.body.success).toBe(true);
+    expect(res2.body.success).toBe(true);
   });
 });

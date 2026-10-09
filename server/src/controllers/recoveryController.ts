@@ -26,6 +26,7 @@ export const reassignDisruptionHandler = async (
     const closures = validatedBody.closures as RoomClosure[] | undefined;
 
     const userId = (req as any).user?.id || (req as any).user?._id;
+    const userRole = (req as any).user?.role;
 
     const report: RecoveryReport = await recoveryService.handleRoomClosure(event, {
       currentAssignments,
@@ -33,6 +34,7 @@ export const reassignDisruptionHandler = async (
       rooms,
       closures,
       userId,
+      userRole,
     });
 
     const response: ApiSuccess<RecoveryReport> = {

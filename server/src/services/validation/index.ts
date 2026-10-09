@@ -39,7 +39,7 @@ export function doSlotsOverlap(slotA: TimeSlot, slotB: TimeSlot): boolean {
   }
 
   // If no differing dates, they must be on the same day of the week to overlap
-  if (slotA.dayOfWeek !== slotB.dayOfWeek) {
+  if (slotA.dayOfWeek.toUpperCase() !== slotB.dayOfWeek.toUpperCase()) {
     return false;
   }
 

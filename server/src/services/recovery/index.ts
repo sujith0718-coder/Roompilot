@@ -7,16 +7,15 @@ import {
   Room,
   RoomClosure,
   TimeSlot,
+  UserRole,
 } from '../../../../shared/types/index.js';
 import {
   BookingModel,
   RoomModel,
   RoomClosureModel,
   AuditLogModel,
-  AllocationRunModel,
 } from '../../models/index.js';
 import { validationService, doSlotsOverlap } from '../validation/index.js';
-import { allocationService } from '../allocation/index.js';
 import { mockRooms, mockBookingRequests } from '../../../tests/fixtures/sharedFixtures.js';
 
 export interface RecoveryOptions {
@@ -25,6 +24,7 @@ export interface RecoveryOptions {
   rooms?: Room[];
   closures?: RoomClosure[];
   userId?: string;
+  userRole?: UserRole;
 }
 
 export interface IRecoveryService {
@@ -34,6 +34,19 @@ export interface IRecoveryService {
   ): Promise<RecoveryReport>;
 }
 
+function toObjectId(id?: string): mongoose.Types.ObjectId {
+  if (id && mongoose.Types.ObjectId.isValid(id)) {
+    return new mongoose.Types.ObjectId(id);
+  }
+  if (id && typeof id === 'string') {
+    const hex = Buffer.from(id).toString('hex').padEnd(24, '0').slice(0, 24);
+    if (mongoose.Types.ObjectId.isValid(hex)) {
+      return new mongoose.Types.ObjectId(hex);
+    }
+  }
+  return new mongoose.Types.ObjectId();
+}
+
 export class RecoveryService implements IRecoveryService {
   public async handleRoomClosure(
     event: DisruptionEvent,
@@ -41,12 +54,14 @@ export class RecoveryService implements IRecoveryService {
   ): Promise<RecoveryReport> {
     const isDbConnected = mongoose.connection.readyState === 1;
 
-    // 1. Resolve Request Dataset
+    // 1. Resolve Request Dataset (Including PENDING, APPROVED, and ALLOCATED bookings)
     let requests: BookingRequest[] = [];
     if (options.requests && options.requests.length > 0) {
       requests = options.requests;
     } else if (isDbConnected) {
-      const dbBookings = await BookingModel.find({ status: { $in: ['PENDING', 'APPROVED'] } }).lean();
+      const dbBookings = await BookingModel.find({
+        status: { $in: ['PENDING', 'APPROVED', 'ALLOCATED'] },
+      }).lean();
       requests = dbBookings.map((b) => ({
         id: String(b._id),
         title: b.title,
@@ -58,6 +73,7 @@ export class RecoveryService implements IRecoveryService {
         slot: b.slot,
         status: b.status,
         assignedRoomId: b.assignedRoomId ? String(b.assignedRoomId) : undefined,
+        unassignedReason: b.unassignedReason,
         createdAt: b.createdAt ? new Date(b.createdAt as any).toISOString() : new Date().toISOString(),
       }));
     } else {
@@ -97,37 +113,18 @@ export class RecoveryService implements IRecoveryService {
     const closedRoomId = targetRoom ? String(targetRoom.id || targetRoom.code) : event.roomId;
     const closedRoomCode = targetRoom?.code || event.roomId;
 
-    // 3. Resolve Current Assignments Baseline
+    // 3. Resolve Baseline Current Assignments
     let currentAssignments: AllocationAssignment[] = [];
     if (options.currentAssignments && options.currentAssignments.length > 0) {
       currentAssignments = options.currentAssignments;
-    } else if (isDbConnected) {
-      const latestRun = await AllocationRunModel.findOne({ status: 'SUCCESS' })
-        .sort({ createdAt: -1 })
-        .lean();
-      if (latestRun && latestRun.assignments.length > 0) {
-        currentAssignments = latestRun.assignments.map((a) => ({
-          bookingId: String(a.bookingId),
-          roomId: String(a.roomId),
-          explanation: a.explanation,
+    } else {
+      currentAssignments = requests
+        .filter((req) => req.assignedRoomId)
+        .map((req) => ({
+          bookingId: String(req.id),
+          roomId: String(req.assignedRoomId),
+          explanation: 'Current assigned room',
         }));
-      } else {
-        currentAssignments = requests
-          .filter((req) => req.assignedRoomId)
-          .map((req) => ({
-            bookingId: String(req.id),
-            roomId: String(req.assignedRoomId),
-            explanation: 'Database pre-assigned room',
-          }));
-      }
-    }
-
-    // Fallback if no baseline assignments found
-    if (currentAssignments.length === 0) {
-      const allocResult = await allocationService.runAllocation(requests, rooms, 'HEURISTIC', {
-        saveRecord: false,
-      });
-      currentAssignments = allocResult.assignments;
     }
 
     // 4. Resolve Existing Active Closures
@@ -144,7 +141,7 @@ export class RecoveryService implements IRecoveryService {
       }));
     }
 
-    // 5. Separate Affected vs Unaffected Assignments
+    // 5. Separate Affected vs Unaffected Assignments (Slot-Scoped vs Full-Room)
     const affected: AllocationAssignment[] = [];
     const unaffected: AllocationAssignment[] = [];
 
@@ -162,44 +159,29 @@ export class RecoveryService implements IRecoveryService {
         continue;
       }
 
-      // Check slot match if event.slot is provided
-      if (event.slot && !doSlotsOverlap(req.slot, event.slot)) {
-        unaffected.push(a);
+      // Slot-Scoped Closure check:
+      if (event.slot) {
+        if (doSlotsOverlap(req.slot, event.slot)) {
+          affected.push(a);
+        } else {
+          unaffected.push(a);
+        }
       } else {
+        // Full room closure without slot -> affects all slots
         affected.push(a);
       }
     }
 
-    // 6. Record DB Closure & Update Target Room
-    if (isDbConnected) {
-      try {
-        if (targetRoom && mongoose.Types.ObjectId.isValid(closedRoomId)) {
-          await RoomModel.updateOne(
-            { _id: closedRoomId },
-            { isBlocked: true, blockReason: event.reason }
-          );
-          await RoomClosureModel.create({
-            roomId: new mongoose.Types.ObjectId(closedRoomId),
-            reason: event.reason,
-            slot: event.slot,
-            status: 'ACTIVE',
-            closedBy:
-              options.userId && mongoose.Types.ObjectId.isValid(options.userId)
-                ? new mongoose.Types.ObjectId(options.userId)
-                : undefined,
-          });
-        }
-      } catch (err) {
-        console.warn('⚠️ Could not update Room/RoomClosure in DB:', err);
-      }
-    }
-
-    // 7. Active assigned slots tracking for unaffected rooms
+    // 6. Active Assigned Slots Tracking for Unaffected Rooms
     const activeAssignedSlots: { roomId: string; slot: TimeSlot; bookingId?: string }[] = [];
     for (const a of unaffected) {
       const req = requestMap.get(String(a.bookingId));
       if (req) {
-        activeAssignedSlots.push({ roomId: String(a.roomId), slot: req.slot, bookingId: String(req.id) });
+        activeAssignedSlots.push({
+          roomId: String(a.roomId),
+          slot: req.slot,
+          bookingId: String(req.id),
+        });
       }
     }
 
@@ -216,20 +198,19 @@ export class RecoveryService implements IRecoveryService {
 
     const reassignedBookings: RecoveryReport['reassignedBookings'] = [];
     const unresolvedBookingIds: RecoveryReport['unresolvedBookingIds'] = [];
-    const finalAssignments: AllocationAssignment[] = [...unaffected];
+    const candidateFinalAssignments: AllocationAssignment[] = [...unaffected];
 
-    // 8. Reassignment Loop for Affected Bookings
+    // 7. Reassignment Loop for Affected Bookings
     for (const aff of affected) {
       const req = requestMap.get(String(aff.bookingId));
       if (!req) continue;
 
-      // Filter available candidate rooms
+      // Filter available candidate rooms (excluding closed room)
       const candidateRooms = rooms
         .filter(
           (r) =>
             String(r.id) !== closedRoomId &&
-            r.code !== closedRoomCode &&
-            !r.isBlocked
+            r.code !== closedRoomCode
         )
         .map((room) => {
           const canonicalId = String(room.id || room.code);
@@ -250,7 +231,7 @@ export class RecoveryService implements IRecoveryService {
         .filter((c) => c.validation.isValid);
 
       if (candidateRooms.length > 0) {
-        // Best fit: minimize capacity waste
+        // Best-fit selection minimizing capacity waste
         candidateRooms.sort((a, b) => a.capacityWaste - b.capacityWaste);
         const chosen = candidateRooms[0];
 
@@ -263,7 +244,7 @@ export class RecoveryService implements IRecoveryService {
           explanation,
         });
 
-        finalAssignments.push({
+        candidateFinalAssignments.push({
           bookingId: String(req.id),
           roomId: chosen.canonicalId,
           explanation,
@@ -274,57 +255,235 @@ export class RecoveryService implements IRecoveryService {
           slot: req.slot,
           bookingId: String(req.id),
         });
-
-        // Update DB booking document if connected
-        if (isDbConnected && mongoose.Types.ObjectId.isValid(req.id)) {
-          try {
-            await BookingModel.updateOne(
-              { _id: req.id },
-              { assignedRoomId: new mongoose.Types.ObjectId(chosen.canonicalId) }
-            );
-          } catch (err) {
-            console.warn(`⚠️ Could not update assignedRoomId for booking ${req.id}:`, err);
-          }
-        }
       } else {
         const reqSlotStr = `${req.slot.dayOfWeek} (${req.slot.startTime}-${req.slot.endTime})`;
         unresolvedBookingIds.push({
           bookingId: String(req.id),
-          reason: `No alternative room meeting constraints (capacity ${req.enrollmentCount}, facilities [${req.requiredFacilities.join(', ')}], open slot ${reqSlotStr}) during recovery after room ${closedRoomCode} closure.`,
+          reason: `No alternative room meeting constraints (capacity ${req.enrollmentCount}, facilities [${req.requiredFacilities.join(', ')}], slot ${reqSlotStr}) during recovery after room ${closedRoomCode} closure.`,
         });
       }
     }
 
-    // 9. Independent Post-Recovery Hard-Constraint Validation
+    // 8. Independent Pre-Commit Candidate Allocation Validation (Fail-Closed)
     const validation = validationService.validateAllocation(
-      finalAssignments,
+      candidateFinalAssignments,
       requests,
       rooms,
       activeClosures
     );
 
     if (!validation.isValid) {
-      console.warn('⚠️ Independent validation detected post-recovery violations:', validation.violations);
+      throw new Error(
+        `Recovery candidate allocation failed independent validation: ${validation.violations.join('; ')}`
+      );
     }
 
-    // 10. Audit Log Persistence
+    // 9. Concurrency & DB Persistence with Session/Transaction and Fallback Compensation Rollback
     if (isDbConnected) {
+      let session: mongoose.ClientSession | null = null;
+      let useTransaction = false;
+
       try {
-        await AuditLogModel.create({
-          action: 'DISRUPTION_RECOVERY_EXECUTED',
-          resource: `RoomClosure:${closedRoomId}`,
-          userRole: 'SYSTEM_ADMIN',
-          details: {
-            closedRoomId,
-            reason: event.reason,
-            affectedCount: affected.length,
-            reassignedCount: reassignedBookings.length,
-            unresolvedCount: unresolvedBookingIds.length,
-            validationPassed: validation.isValid,
-          },
-        });
+        session = await mongoose.startSession();
+        session.startTransaction();
+        useTransaction = true;
+      } catch {
+        useTransaction = false;
+        if (session) {
+          session.endSession();
+          session = null;
+        }
+      }
+
+      const sessionOpt = session && useTransaction ? { session } : {};
+
+      // Compensation tracking for fallback rollback
+      let createdClosureId: mongoose.Types.ObjectId | null = null;
+      let prevRoomBlockedState: { roomId: string; isBlocked: boolean; blockReason?: string } | null = null;
+      const updatedBookingsState: { bookingId: string; prevAssignedRoomId?: mongoose.Types.ObjectId; prevUnassignedReason?: string }[] = [];
+      let createdAuditLogId: mongoose.Types.ObjectId | null = null;
+
+      try {
+        // Concurrency Revalidation
+        for (const reassigned of reassignedBookings) {
+          const req = requestMap.get(reassigned.bookingId);
+          if (req && mongoose.Types.ObjectId.isValid(reassigned.newRoomId)) {
+            const liveDestRoom = await RoomModel.findById(reassigned.newRoomId).lean();
+            if (liveDestRoom && liveDestRoom.isBlocked) {
+              throw new Error(`Concurrency conflict: Destination room ${liveDestRoom.code} is blocked.`);
+            }
+
+            const overlappingDbBookings = await BookingModel.find({
+              assignedRoomId: new mongoose.Types.ObjectId(reassigned.newRoomId),
+              _id: { $ne: new mongoose.Types.ObjectId(reassigned.bookingId) },
+              'slot.dayOfWeek': req.slot.dayOfWeek,
+              status: { $in: ['PENDING', 'APPROVED', 'ALLOCATED'] },
+            }, null, sessionOpt).lean();
+
+            for (const existingDbBooking of overlappingDbBookings) {
+              if (doSlotsOverlap(req.slot, existingDbBooking.slot)) {
+                throw new Error(
+                  `Concurrency conflict: Room ${reassigned.newRoomId} was assigned by another process for slot ${req.slot.dayOfWeek} ${req.slot.startTime}-${req.slot.endTime}.`
+                );
+              }
+            }
+          }
+        }
+
+        // a. Create RoomClosure Document
+        const closureObjId = toObjectId(closedRoomId);
+        const closedByUserId = toObjectId(options.userId);
+
+        const closureDocs = await RoomClosureModel.create(
+          [
+            {
+              roomId: closureObjId,
+              reason: event.reason,
+              slot: event.slot,
+              status: 'ACTIVE',
+              closedBy: closedByUserId,
+            },
+          ],
+          sessionOpt
+        );
+        if (closureDocs.length > 0) {
+          createdClosureId = closureDocs[0]._id as mongoose.Types.ObjectId;
+        }
+
+        // b. Only set Room.isBlocked = true globally if full-room closure (!event.slot)
+        if (!event.slot && targetRoom && mongoose.Types.ObjectId.isValid(closedRoomId)) {
+          const roomBefore = await RoomModel.findById(closedRoomId).lean();
+          if (roomBefore) {
+            prevRoomBlockedState = {
+              roomId: closedRoomId,
+              isBlocked: roomBefore.isBlocked,
+              blockReason: roomBefore.blockReason,
+            };
+          }
+          await RoomModel.updateOne(
+            { _id: closedRoomId },
+            { isBlocked: true, blockReason: event.reason },
+            sessionOpt
+          );
+        }
+
+        // c. Persist Reassigned Booking Updates
+        for (const reassigned of reassignedBookings) {
+          if (mongoose.Types.ObjectId.isValid(reassigned.bookingId)) {
+            const bBefore = await BookingModel.findById(reassigned.bookingId).lean();
+            if (bBefore) {
+              updatedBookingsState.push({
+                bookingId: reassigned.bookingId,
+                prevAssignedRoomId: bBefore.assignedRoomId,
+                prevUnassignedReason: bBefore.unassignedReason,
+              });
+            }
+            await BookingModel.updateOne(
+              { _id: reassigned.bookingId },
+              {
+                assignedRoomId: mongoose.Types.ObjectId.isValid(reassigned.newRoomId)
+                  ? new mongoose.Types.ObjectId(reassigned.newRoomId)
+                  : reassigned.newRoomId,
+                $unset: { unassignedReason: 1 },
+              },
+              sessionOpt
+            );
+          }
+        }
+
+        // d. Update Unresolved Bookings in DB
+        for (const unresolved of unresolvedBookingIds) {
+          if (mongoose.Types.ObjectId.isValid(unresolved.bookingId)) {
+            const bBefore = await BookingModel.findById(unresolved.bookingId).lean();
+            if (bBefore) {
+              updatedBookingsState.push({
+                bookingId: unresolved.bookingId,
+                prevAssignedRoomId: bBefore.assignedRoomId,
+                prevUnassignedReason: bBefore.unassignedReason,
+              });
+            }
+            await BookingModel.updateOne(
+              { _id: unresolved.bookingId },
+              {
+                $unset: { assignedRoomId: 1 },
+                unassignedReason: unresolved.reason,
+              },
+              sessionOpt
+            );
+          }
+        }
+
+        // e. Create Audit Log Document with Authenticated Actor Context
+        const actorUserId = toObjectId(options.userId);
+        const actorRole: UserRole = options.userRole || 'SYSTEM_ADMIN';
+
+        const auditDocs = await AuditLogModel.create(
+          [
+            {
+              userId: actorUserId,
+              userRole: actorRole,
+              action: 'DISRUPTION_RECOVERY_EXECUTED',
+              resource: `RoomClosure:${closedRoomId}`,
+              details: {
+                closedRoomId,
+                reason: event.reason,
+                affectedCount: affected.length,
+                reassignedCount: reassignedBookings.length,
+                unresolvedCount: unresolvedBookingIds.length,
+                validationPassed: validation.isValid,
+              },
+            },
+          ],
+          sessionOpt
+        );
+        if (auditDocs.length > 0) {
+          createdAuditLogId = auditDocs[0]._id as mongoose.Types.ObjectId;
+        }
+
+        if (session && useTransaction) {
+          await session.commitTransaction();
+        }
       } catch (err) {
-        console.warn('⚠️ Could not log audit entry for recovery execution:', err);
+        if (session && useTransaction) {
+          await session.abortTransaction();
+        } else {
+          // Manual compensation / rollback for non-transactional mode
+          try {
+            if (createdClosureId) {
+              await RoomClosureModel.deleteOne({ _id: createdClosureId });
+            }
+            if (prevRoomBlockedState) {
+              await RoomModel.updateOne(
+                { _id: prevRoomBlockedState.roomId },
+                { isBlocked: prevRoomBlockedState.isBlocked, blockReason: prevRoomBlockedState.blockReason }
+              );
+            }
+            for (const bState of updatedBookingsState) {
+              const update: Record<string, any> = {};
+              if (bState.prevAssignedRoomId) {
+                update.assignedRoomId = bState.prevAssignedRoomId;
+              } else {
+                update.$unset = { assignedRoomId: 1 };
+              }
+              if (bState.prevUnassignedReason) {
+                update.unassignedReason = bState.prevUnassignedReason;
+              } else {
+                update.$unset = { ...(update.$unset || {}), unassignedReason: 1 };
+              }
+              await BookingModel.updateOne({ _id: bState.bookingId }, update);
+            }
+            if (createdAuditLogId) {
+              await AuditLogModel.deleteOne({ _id: createdAuditLogId });
+            }
+          } catch (rollbackErr) {
+            console.error('Rollback compensation error during recovery failure:', rollbackErr);
+          }
+        }
+        throw err;
+      } finally {
+        if (session) {
+          session.endSession();
+        }
       }
     }
 
