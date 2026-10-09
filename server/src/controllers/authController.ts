@@ -7,7 +7,6 @@ import { env } from '../config/env.js';
 import { UserModel } from '../models/User.js';
 import { AppError } from '../middleware/errorHandler.js';
 import {
-  ALL_USER_ROLES,
   UserRole,
   User,
   ApiSuccess,
@@ -17,9 +16,8 @@ import {
 
 export const loginSchema = z.object({
   email: z.string().email('Invalid email address format'),
-  password: z.string().min(1, 'Password is required').optional(),
-  role: z.enum(ALL_USER_ROLES as [UserRole, ...UserRole[]]).optional(),
-});
+  password: z.string().min(1, 'Password is required'),
+}).strict();
 
 // Demo fallback user mapping for development / disconnected DB mode
 const DEMO_FALLBACK_ACCOUNTS: Record<string, { name: string; role: UserRole; department: string }> = {
@@ -44,7 +42,7 @@ const DEMO_FALLBACK_ACCOUNTS: Record<string, { name: string; role: UserRole; dep
  */
 export const login = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { email, password, role } = req.body as z.infer<typeof loginSchema>;
+    const { email, password } = req.body as z.infer<typeof loginSchema>;
     const normalizedEmail = email.toLowerCase().trim();
 
     let authenticatedUser: User | null = null;
@@ -52,55 +50,36 @@ export const login = async (req: Request, res: Response, next: NextFunction): Pr
 
     if (isDbConnected) {
       const userDoc = await UserModel.findOne({ email: normalizedEmail });
-
-      if (userDoc) {
-        if (password) {
-          const isPasswordValid = await bcrypt.compare(password, userDoc.passwordHash);
-          if (!isPasswordValid) {
-            throw new AppError(401, 'INVALID_CREDENTIALS', 'Invalid email or password');
-          }
-        }
-        // In dev mode: allow role quick launch if password omitted but user exists
-        authenticatedUser = {
-          id: userDoc._id.toString(),
-          name: userDoc.name,
-          email: userDoc.email,
-          role: userDoc.role,
-          department: userDoc.department,
-          createdAt: userDoc.createdAt?.toISOString(),
-        };
-      }
-    }
-
-    // Fallback when DB is disconnected or for synthetic demo accounts in development
-    if (!authenticatedUser) {
-      const fallback = DEMO_FALLBACK_ACCOUNTS[normalizedEmail];
-      if (fallback) {
-        // If password is supplied for demo account in dev mode, verify or accept default
-        if (password && password !== 'DemoPass2026!' && password !== 'RoomWise@2026' && password !== 'demo') {
-          throw new AppError(401, 'INVALID_CREDENTIALS', 'Invalid email or password');
-        }
-        authenticatedUser = {
-          id: `demo_${fallback.role.toLowerCase()}`,
-          name: fallback.name,
-          email: normalizedEmail,
-          role: fallback.role,
-          department: fallback.department,
-          createdAt: new Date().toISOString(),
-        };
-      } else if (role && ALL_USER_ROLES.includes(role)) {
-        // Quick demo role login in dev mode
-        authenticatedUser = {
-          id: `demo_${role.toLowerCase()}`,
-          name: `${role.replace('_', ' ')} Demo User`,
-          email: normalizedEmail,
-          role,
-          department: 'Campus Administration',
-          createdAt: new Date().toISOString(),
-        };
-      } else {
+      if (!userDoc || !(await bcrypt.compare(password, userDoc.passwordHash))) {
         throw new AppError(401, 'INVALID_CREDENTIALS', 'Invalid email or password');
       }
+
+      authenticatedUser = {
+        id: userDoc._id.toString(),
+        name: userDoc.name,
+        email: userDoc.email,
+        role: userDoc.role,
+        department: userDoc.department,
+        createdAt: userDoc.createdAt?.toISOString(),
+      };
+    } else if (env.NODE_ENV === 'development') {
+      // Local-only fallback for a known synthetic account when MongoDB is unavailable.
+      // Never enable this fallback in test or production environments.
+      const fallback = DEMO_FALLBACK_ACCOUNTS[normalizedEmail];
+      if (!fallback || password !== 'DemoPass2026!') {
+        throw new AppError(401, 'INVALID_CREDENTIALS', 'Invalid email or password');
+      }
+
+      authenticatedUser = {
+        id: `demo_${fallback.role.toLowerCase()}`,
+        name: fallback.name,
+        email: normalizedEmail,
+        role: fallback.role,
+        department: fallback.department,
+        createdAt: new Date().toISOString(),
+      };
+    } else {
+      throw new AppError(503, 'AUTH_UNAVAILABLE', 'Authentication requires a database connection');
     }
 
     // Issue signed JWT token containing server-verified user identity & role
