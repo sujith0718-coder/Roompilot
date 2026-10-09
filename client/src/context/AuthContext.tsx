@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { User, UserRole } from '../types';
+import { User } from '../types';
 import { api } from '../api/client';
 
 interface AuthContextType {
@@ -57,14 +57,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.removeItem('roomwise_user');
     }
   }, [user]);
-
-  useEffect(() => {
-    if (token) {
-      localStorage.setItem('roomwise_auth_token', token);
-    } else {
-      localStorage.removeItem('roomwise_auth_token');
-    }
-  }, [token]);
 
   useEffect(() => {
     if (token) {
