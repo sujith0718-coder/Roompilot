@@ -1,6 +1,5 @@
 import {
   User,
-  UserRole,
   Room,
   BookingRequest,
   BookingStatus,
@@ -407,9 +406,9 @@ export const api = {
   // 6. Disruption & Recovery
   closeRoomAndRecover: async (roomId: string, reason: string): Promise<RecoveryReport> => {
     try {
-      return await request<RecoveryReport>('/recovery/close-room', {
+      return await request<RecoveryReport>('/recovery/reassign', {
         method: 'POST',
-        body: JSON.stringify({ roomId, reason }),
+        body: JSON.stringify({ event: { roomId, reason } }),
       });
     } catch {
       const room = mockRooms.find((r) => r.id === roomId);

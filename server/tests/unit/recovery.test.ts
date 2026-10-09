@@ -184,4 +184,23 @@ describe('Disruption Recovery Engine — Room Closures & Reassignment Tests', ()
       expect(newRoomId).not.toBe('room-101'); // MUST NOT stay in closed room!
     }
   });
+
+  it('RecoveryService.handleRoomClosure executes recovery workflow asynchronously', async () => {
+    const { recoveryService } = await import('../../src/services/recovery/index.js');
+    const report = await recoveryService.handleRoomClosure(
+      {
+        roomId: 'room-101',
+        reason: 'HVAC repair',
+      },
+      {
+        rooms: mockRooms,
+        requests: mockBookingRequests,
+      }
+    );
+
+    expect(report.closedRoomId).toBe('room-101');
+    expect(report.timestamp).toBeDefined();
+    expect(typeof report.unaffectedAssignmentsPreservedCount).toBe('number');
+  });
 });
+

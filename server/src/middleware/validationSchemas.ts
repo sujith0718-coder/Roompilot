@@ -74,3 +74,24 @@ export const runAllocationSchema = z.object({
   rooms: z.array(z.any()).optional(),
   closures: z.array(z.any()).optional(),
 });
+
+export const reassignDisruptionSchema = z.object({
+  event: z.object({
+    roomId: z.string().min(1, 'Room ID is required'),
+    reason: z.string().min(3, 'Reason must be at least 3 characters').trim(),
+    slot: timeSlotSchema.optional(),
+  }),
+  currentAssignments: z
+    .array(
+      z.object({
+        bookingId: z.string().min(1, 'Booking ID is required'),
+        roomId: z.string().min(1, 'Room ID is required'),
+        explanation: z.string().optional().default('Current assignment'),
+      })
+    )
+    .optional(),
+  requests: z.array(z.any()).optional(),
+  rooms: z.array(z.any()).optional(),
+  closures: z.array(z.any()).optional(),
+});
+

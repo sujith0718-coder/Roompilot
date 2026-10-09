@@ -216,7 +216,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
 
                   <div className="text-right text-xs font-mono">
                     <span className="text-slate-400 block">{booking.assignedRoomId ? `Room: ${booking.assignedRoomId}` : 'Unassigned'}</span>
-                    <span className="text-[10px] text-slate-500">{new Date(booking.createdAt).toLocaleDateString()}</span>
+                    <span className="text-[10px] text-slate-500">{booking.createdAt ? new Date(booking.createdAt).toLocaleDateString() : 'N/A'}</span>
                   </div>
                 </div>
               ))}

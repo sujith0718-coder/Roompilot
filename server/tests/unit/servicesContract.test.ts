@@ -21,7 +21,7 @@ describe('Shared Service Boundaries & Contract Conformance Tests', () => {
     expect(heuristicResult.validation?.isValid).toBe(true);
   });
 
-  it('RecoveryService satisfies IRecoveryService and reports Phase 1 status on main', async () => {
+  it('RecoveryService satisfies IRecoveryService and handles disruption room closure', async () => {
     expect(typeof recoveryService.handleRoomClosure).toBe('function');
 
     const event: DisruptionEvent = {
@@ -29,9 +29,14 @@ describe('Shared Service Boundaries & Contract Conformance Tests', () => {
       reason: 'Inspection',
     };
 
-    await expect(recoveryService.handleRoomClosure(event)).rejects.toThrow(
-      /RecoveryService logic not implemented in Phase 1 foundation/
-    );
+    const report = await recoveryService.handleRoomClosure(event, {
+      rooms: mockRooms,
+      requests: mockBookingRequests,
+    });
+
+    expect(report.closedRoomId).toBe('room-101');
+    expect(report.timestamp).toBeDefined();
+    expect(Array.isArray(report.reassignedBookings)).toBe(true);
   });
 
   it('AuditService satisfies IAuditService and logs actions according to contract', async () => {
