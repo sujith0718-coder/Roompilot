@@ -112,21 +112,11 @@ export const runAllocationSchema = z.object({
 });
 
 export const reassignDisruptionSchema = z.object({
-  event: z.object({
-    roomId: z.string().min(1, 'Room ID is required'),
-    reason: z.string().min(3, 'Reason must be at least 3 characters').trim(),
-    slot: timeSlotSchema.optional(),
-  }),
-  currentAssignments: z
-    .array(
-      z.object({
-        bookingId: z.string().min(1, 'Booking ID is required'),
-        roomId: z.string().min(1, 'Room ID is required'),
-        explanation: z.string().optional().default('Current assignment'),
-      })
-    )
-    .optional(),
-  requests: z.array(bookingRequestInputSchema).optional(),
-  rooms: z.array(roomInputSchema).optional(),
-  closures: z.array(roomClosureInputSchema).optional(),
-});
+  event: z
+    .object({
+      roomId: z.string().min(1, 'Room ID is required').trim(),
+      reason: z.string().min(3, 'Reason must be at least 3 characters').max(500).trim(),
+      slot: timeSlotSchema.optional(),
+    })
+    .strict(),
+}).strict();

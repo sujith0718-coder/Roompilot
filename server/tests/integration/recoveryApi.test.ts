@@ -69,6 +69,54 @@ describe('API Integration — Disruption Recovery Endpoint (/api/v1/recovery/rea
     expect(resInvertedSlot.body.error?.code).toBe('VALIDATION_ERROR');
   });
 
+  it('Scenario 17: rejects client attempts to supply unauthorized requests/rooms/closures data with 400 VALIDATION_ERROR', async () => {
+    const resRogueBody = await request(app)
+      .post('/api/v1/recovery/reassign')
+      .set('Authorization', `Bearer ${testTokens.SYSTEM_ADMIN}`)
+      .send({
+        event: {
+          roomId: 'room-101',
+          reason: 'Valid emergency closure reason',
+        },
+        requests: [
+          {
+            id: 'rogue-booking-id',
+            title: 'Fabricated Hijack Request',
+            enrollmentCount: 1,
+            slot: { dayOfWeek: 'MONDAY', startTime: '09:00', endTime: '10:00' },
+          },
+        ],
+        rooms: [
+          {
+            id: 'rogue-room-id',
+            code: 'ROGUE-99',
+            capacity: 999,
+          },
+        ],
+      });
+
+    // Public API strictly rejects rogue client-supplied datasets
+    expect(resRogueBody.status).toBe(400);
+    expect(resRogueBody.body.success).toBe(false);
+    expect(resRogueBody.body.error?.code).toBe('VALIDATION_ERROR');
+  });
+
+  it('Scenario 18: rejects unknown non-existent room with 404 ROOM_NOT_FOUND', async () => {
+    const resUnknownRoom = await request(app)
+      .post('/api/v1/recovery/reassign')
+      .set('Authorization', `Bearer ${testTokens.SYSTEM_ADMIN}`)
+      .send({
+        event: {
+          roomId: 'non-existent-room-999',
+          reason: 'Valid emergency closure reason',
+        },
+      });
+
+    expect(resUnknownRoom.status).toBe(404);
+    expect(resUnknownRoom.body.success).toBe(false);
+    expect(resUnknownRoom.body.error?.code).toBe('ROOM_NOT_FOUND');
+  });
+
   it('Scenario 15: executes disruption recovery for authorized role (SYSTEM_ADMIN) returning 200 OK with RecoveryReport', async () => {
     const res = await request(app)
       .post('/api/v1/recovery/reassign')

@@ -5,11 +5,8 @@ import {
   ApiSuccess,
   RecoveryReport,
   DisruptionEvent,
-  AllocationAssignment,
-  BookingRequest,
-  Room,
-  RoomClosure,
 } from '../../../shared/types/index.js';
+import { AppError } from '../middleware/errorHandler.js';
 
 export const reassignDisruptionHandler = async (
   req: Request,
@@ -18,23 +15,22 @@ export const reassignDisruptionHandler = async (
 ): Promise<void> => {
   try {
     const validatedBody = reassignDisruptionSchema.parse(req.body);
-
     const event = validatedBody.event as DisruptionEvent;
-    const currentAssignments = validatedBody.currentAssignments as AllocationAssignment[] | undefined;
-    const requests = validatedBody.requests as BookingRequest[] | undefined;
-    const rooms = validatedBody.rooms as Room[] | undefined;
-    const closures = validatedBody.closures as RoomClosure[] | undefined;
 
-    const userId = (req as any).user?.id || (req as any).user?._id;
-    const userRole = (req as any).user?.role;
+    const user = (req as any).user;
+    if (!user || !user.id || !user.role) {
+      throw new AppError(
+        401,
+        'UNAUTHORIZED',
+        'Authentication context with valid user identity and role is required'
+      );
+    }
 
     const report: RecoveryReport = await recoveryService.handleRoomClosure(event, {
-      currentAssignments,
-      requests,
-      rooms,
-      closures,
-      userId,
-      userRole,
+      actor: {
+        id: String(user.id),
+        role: user.role,
+      },
     });
 
     const response: ApiSuccess<RecoveryReport> = {

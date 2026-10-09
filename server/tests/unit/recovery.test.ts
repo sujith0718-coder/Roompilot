@@ -15,6 +15,11 @@ import {
 import { recoveryService } from '../../src/services/recovery/index.js';
 import { doSlotsOverlap, validationService } from '../../src/services/validation/index.js';
 
+const mockAdminActor = {
+  id: '507f1f77bcf86cd799439008',
+  role: 'SYSTEM_ADMIN' as const,
+};
+
 describe('Disruption Recovery Engine — Comprehensive Unit Suite', () => {
   it('Scenario 1: Allocated bookings with status ALLOCATED are recovered and preserve their status', async () => {
     const allocatedReq: BookingRequest = {
@@ -37,9 +42,12 @@ describe('Disruption Recovery Engine — Comprehensive Unit Suite', () => {
         slot: slotMorning,
       },
       {
-        requests: [allocatedReq],
-        rooms: mockRooms,
-        currentAssignments: [{ bookingId: 'req-allocated-1', roomId: 'room-101', explanation: 'Assigned' }],
+        actor: mockAdminActor,
+        __testOverrides: {
+          requests: [allocatedReq],
+          rooms: mockRooms,
+          currentAssignments: [{ bookingId: 'req-allocated-1', roomId: 'room-101', explanation: 'Assigned' }],
+        },
       }
     );
 
@@ -82,12 +90,15 @@ describe('Disruption Recovery Engine — Comprehensive Unit Suite', () => {
         slot: slotMorning,
       },
       {
-        requests: [morningReq, afternoonReq],
-        rooms: mockRooms,
-        currentAssignments: [
-          { bookingId: 'req-morning', roomId: 'room-101', explanation: 'Morning' },
-          { bookingId: 'req-afternoon', roomId: 'room-101', explanation: 'Afternoon' },
-        ],
+        actor: mockAdminActor,
+        __testOverrides: {
+          requests: [morningReq, afternoonReq],
+          rooms: mockRooms,
+          currentAssignments: [
+            { bookingId: 'req-morning', roomId: 'room-101', explanation: 'Morning' },
+            { bookingId: 'req-afternoon', roomId: 'room-101', explanation: 'Afternoon' },
+          ],
+        },
       }
     );
 
@@ -129,12 +140,15 @@ describe('Disruption Recovery Engine — Comprehensive Unit Suite', () => {
         reason: 'Full building renovation',
       },
       {
-        requests: [req1, req2],
-        rooms: mockRooms,
-        currentAssignments: [
-          { bookingId: 'req-f1', roomId: 'room-101', explanation: 'C1' },
-          { bookingId: 'req-f2', roomId: 'room-101', explanation: 'C2' },
-        ],
+        actor: mockAdminActor,
+        __testOverrides: {
+          requests: [req1, req2],
+          rooms: mockRooms,
+          currentAssignments: [
+            { bookingId: 'req-f1', roomId: 'room-101', explanation: 'C1' },
+            { bookingId: 'req-f2', roomId: 'room-101', explanation: 'C2' },
+          ],
+        },
       }
     );
 
@@ -176,9 +190,12 @@ describe('Disruption Recovery Engine — Comprehensive Unit Suite', () => {
         reason: 'Lab explosion',
       },
       {
-        requests: [hugeLabReq],
-        rooms: mockRooms,
-        currentAssignments: [{ bookingId: 'req-huge-lab', roomId: 'room-201', explanation: 'Assigned' }],
+        actor: mockAdminActor,
+        __testOverrides: {
+          requests: [hugeLabReq],
+          rooms: mockRooms,
+          currentAssignments: [{ bookingId: 'req-huge-lab', roomId: 'room-201', explanation: 'Assigned' }],
+        },
       }
     );
 
@@ -211,14 +228,47 @@ describe('Disruption Recovery Engine — Comprehensive Unit Suite', () => {
       recoveryService.handleRoomClosure(
         { roomId: 'room-101', reason: 'Test validation failure' },
         {
-          requests: [req],
-          rooms: mockRooms,
-          currentAssignments: [{ bookingId: 'req-v1', roomId: 'room-101', explanation: 'Assigned' }],
+          actor: mockAdminActor,
+          __testOverrides: {
+            requests: [req],
+            rooms: mockRooms,
+            currentAssignments: [{ bookingId: 'req-v1', roomId: 'room-101', explanation: 'Assigned' }],
+          },
         }
       )
     ).rejects.toThrow('Recovery candidate allocation failed independent validation');
 
     spy.mockRestore();
+  });
+
+  it('Scenario 8: Unknown room rejection — rejects with ROOM_NOT_FOUND if room does not exist', async () => {
+    await expect(
+      recoveryService.handleRoomClosure(
+        { roomId: 'non-existent-room-999', reason: 'Structural issue' },
+        {
+          actor: mockAdminActor,
+          __testOverrides: {
+            rooms: mockRooms,
+            requests: [],
+            currentAssignments: [],
+          },
+        }
+      )
+    ).rejects.toThrow("Room 'non-existent-room-999' does not exist");
+  });
+
+  it('Scenario 9: Day-of-week case normalization works across upper and mixed case', () => {
+    const slotA: TimeSlot = { dayOfWeek: 'Monday' as any, startTime: '09:00', endTime: '10:00' };
+    const slotB: TimeSlot = { dayOfWeek: 'MONDAY' as any, startTime: '09:30', endTime: '10:30' };
+
+    expect(doSlotsOverlap(slotA, slotB)).toBe(true);
+  });
+
+  it('Scenario 10: Date-specific slots do NOT overlap if scheduled on different dates', () => {
+    const slotA: TimeSlot = { dayOfWeek: 'MONDAY', startTime: '09:00', endTime: '10:00', date: '2026-10-12' };
+    const slotB: TimeSlot = { dayOfWeek: 'MONDAY', startTime: '09:00', endTime: '10:00', date: '2026-10-19' };
+
+    expect(doSlotsOverlap(slotA, slotB)).toBe(false);
   });
 
   it('Scenario 16: Unaffected assignment preservation — bookings in unaffected rooms remain unchanged', async () => {
@@ -254,12 +304,15 @@ describe('Disruption Recovery Engine — Comprehensive Unit Suite', () => {
         reason: 'Water leak',
       },
       {
-        requests: [reqIn101, reqIn201],
-        rooms: mockRooms,
-        currentAssignments: [
-          { bookingId: 'req-in-101', roomId: 'room-101', explanation: 'In 101' },
-          { bookingId: 'req-in-201', roomId: 'room-201', explanation: 'In 201' },
-        ],
+        actor: mockAdminActor,
+        __testOverrides: {
+          requests: [reqIn101, reqIn201],
+          rooms: mockRooms,
+          currentAssignments: [
+            { bookingId: 'req-in-101', roomId: 'room-101', explanation: 'In 101' },
+            { bookingId: 'req-in-201', roomId: 'room-201', explanation: 'In 201' },
+          ],
+        },
       }
     );
 

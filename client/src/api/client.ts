@@ -156,9 +156,9 @@ const INITIAL_AUDIT_LOGS: AuditLogEntry[] = [
   { id: 'log_005', userId: 'usr_admin', userRole: 'SYSTEM_ADMIN', action: 'BLOCK_ROOM', resource: 'Room MECH-105', details: { reason: 'AC Compressor Repair' }, timestamp: '2026-10-09T08:00:00.000Z' },
 ];
 
-let mockRooms = [...INITIAL_ROOMS];
-let mockBookings = [...INITIAL_BOOKINGS];
-let mockAuditLogs = [...INITIAL_AUDIT_LOGS];
+const mockRooms = [...INITIAL_ROOMS];
+const mockBookings = [...INITIAL_BOOKINGS];
+const mockAuditLogs = [...INITIAL_AUDIT_LOGS];
 
 // ==========================================
 // API SERVICE METHODS WITH MOCK FALLBACKS
