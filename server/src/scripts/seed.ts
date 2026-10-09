@@ -9,6 +9,7 @@ import path from 'path';
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 import { connectDB } from '../config/db.js';
+import { env } from '../config/env.js';
 import {
   UserModel,
   RoomModel,
@@ -41,6 +42,14 @@ export const syntheticUsers: SeedUserDefinition[] = [
 ];
 
 export async function runSeed(isStandalone = true): Promise<void> {
+  // Fail closed before exporting demo data or deleting any database collections.
+  if (env.NODE_ENV !== 'development') {
+    throw new Error('Database seeding is allowed only when NODE_ENV=development.');
+  }
+  if (process.env.ALLOW_DESTRUCTIVE_SEED !== 'true') {
+    throw new Error('This seed script clears existing collections. Set ALLOW_DESTRUCTIVE_SEED=true only when you intend to reset the development database.');
+  }
+
   console.log('----------------------------------------------------');
   console.log(' 🌱 RoomWise Repeatable Development Database Seeder  ');
   console.log(' ⚠️ NOTICE: Synthetic development benchmark data only.');

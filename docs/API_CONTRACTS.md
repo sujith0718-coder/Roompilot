@@ -52,11 +52,27 @@ All endpoints return a uniform JSON response structure.
 ### 2. Authentication
 * `POST /api/v1/auth/login`
   * **Access:** Public
-  * **Body:** `{ "email": "user@campus.edu", "password": "..." }`
-  * **Returns:** User details & JWT token.
+  * **Body:**
+    ```json
+    {
+      "email": "admin@campus.edu",
+      "password": "DemoPass2026!"
+    }
+    ```
+  * **Returns (`200 OK`):** `ApiSuccess<{ user: User, token: string }>` with signed JWT Bearer token and sanitized user details.
+  * **Errors:**
+    * `400 Bad Request`: Validation failure on malformed email.
+    * `401 Unauthorized`: Invalid email or incorrect password (`INVALID_CREDENTIALS`).
+* `POST /api/v1/auth/logout`
+  * **Access:** Authenticated (`Authorization: Bearer <jwt_token>`)
+  * **Body:** None
+  * **Returns (`200 OK`):** `ApiSuccess<null>` acknowledging logout. The client must discard its stored token; a stateless JWT remains valid until expiry.
 * `GET /api/v1/auth/me`
-  * **Access:** Authenticated
-  * **Returns:** Current user session & role details.
+  * **Access:** Authenticated (`Authorization: Bearer <jwt_token>`)
+  * **Returns (`200 OK`):** `ApiSuccess<{ user: User }>` containing verified user session and role.
+  * **Errors:**
+    * `401 Unauthorized`: Missing or malformed token (`UNAUTHORIZED`) or expired/invalid token (`INVALID_TOKEN`).
+
 
 ### 3. Room Management
 * `GET /api/v1/rooms`

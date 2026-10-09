@@ -40,3 +40,5 @@ The system uses **8 fixed role identifiers**:
 1. **Server-Side Enforcement:** Frontend state alone MUST NOT dictate access. Express middleware (`server/src/middleware/rbac.ts`) verifies JWT tokens and enforces role permissions per endpoint.
 2. **Deny by Default:** Any route or action without explicit role authorization defaults to `403 Forbidden`.
 3. **No Dynamic Roles:** Teammates must NOT invent additional roles (e.g. `TEACHER`, `ADMIN`, `MODERATOR`). Use only the 8 fixed role identifiers.
+4. **Resource-Scoped Access:** In addition to role checks, resource modification (e.g. user-submitted booking cancellations or edits) is governed by `authorizeResourceScope`, ensuring regular users can only alter their own owned records while `SYSTEM_ADMIN` or `PRINCIPAL` maintain oversight.
+

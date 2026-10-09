@@ -24,9 +24,10 @@
 3. **Repeatable Database Seeding**
    Populate MongoDB with realistic synthetic rooms, demo accounts for all 8 roles, schedules, and active closures:
    ```bash
-   npm --prefix server run seed
+   ALLOW_DESTRUCTIVE_SEED=true npm --prefix server run seed
    ```
-   * Default password for all seeded accounts: `DemoPass2026!`
+   * Default password for all seeded accounts: `DemoPass2026!` (development demos only).
+   * The seed script clears existing sample collections before recreating demo data. Set `ALLOW_DESTRUCTIVE_SEED=true` only when you intentionally want to reset the configured development database. Seeding is disabled outside development mode.
 
 4. **Running Automated Tests**
    Execute independent validator, schema validation, and RBAC authorization tests:
@@ -34,7 +35,18 @@
    npm --prefix server test
    ```
 
-5. **Start Development Servers**
+5. **Environment Variables Reference**
+   | Variable | Purpose |
+   | :--- | :--- |
+   | `PORT` | Backend port (default `5000`) |
+   | `NODE_ENV` | Use `development` locally; seeding is disabled outside development |
+   | `CLIENT_URL` | Allowed frontend origin |
+   | `MONGODB_URI` | MongoDB connection string |
+   | `JWT_SECRET` | Configure an explicit unique secret of at least 32 characters in production |
+   | `JWT_EXPIRES_IN` | JWT lifetime (default `1d`) |
+   | `TIMEZONE` | Institution timezone (default `Asia/Kolkata`) |
+
+6. **Start Development Servers**
    ```bash
    # In separate terminals:
    npm run dev:server  # Runs Express server at http://localhost:5000
