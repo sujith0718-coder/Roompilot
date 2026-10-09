@@ -35,7 +35,6 @@ export interface User {
   createdAt?: string;
 }
 
-// Room & Facility Domain Contracts
 export type Facility =
   | 'PROJECTOR'
   | 'LAB_EQUIPMENT'
@@ -43,6 +42,15 @@ export type Facility =
   | 'AC'
   | 'SMART_BOARD'
   | 'WHEELCHAIR_ACCESSIBLE';
+
+export const ALL_FACILITIES: Facility[] = [
+  'PROJECTOR',
+  'LAB_EQUIPMENT',
+  'AUDIO_SYSTEM',
+  'AC',
+  'SMART_BOARD',
+  'WHEELCHAIR_ACCESSIBLE',
+];
 
 export interface Room {
   id: string;
@@ -64,8 +72,26 @@ export interface TimeSlot {
   date?: string;      // Optional YYYY-MM-DD for specific occurrence
 }
 
+export const ALL_DAYS_OF_WEEK: TimeSlot['dayOfWeek'][] = [
+  'MONDAY',
+  'TUESDAY',
+  'WEDNESDAY',
+  'THURSDAY',
+  'FRIDAY',
+  'SATURDAY',
+  'SUNDAY',
+];
+
 // Booking Request & Status Contracts
 export type BookingStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'ALLOCATED' | 'CANCELLED';
+
+export const ALL_BOOKING_STATUSES: BookingStatus[] = [
+  'PENDING',
+  'APPROVED',
+  'REJECTED',
+  'ALLOCATED',
+  'CANCELLED',
+];
 
 export interface BookingRequest {
   id: string;
@@ -83,9 +109,26 @@ export interface BookingRequest {
 }
 
 // Hard Constraint Validation Result
+export type ConstraintViolationType =
+  | 'CAPACITY'
+  | 'FACILITY'
+  | 'ROOM_CLOSED'
+  | 'OVERLAP'
+  | 'DUPLICATE_ASSIGNMENT'
+  | 'MISSING_ROOM'
+  | 'MISSING_BOOKING';
+
+export interface ConstraintViolationDetail {
+  bookingId?: string;
+  roomId?: string;
+  reason: string;
+  constraintType: ConstraintViolationType;
+}
+
 export interface HardConstraintValidationResult {
   isValid: boolean;
   violations: string[];
+  details?: ConstraintViolationDetail[];
 }
 
 // Allocation Algorithm Types
@@ -117,11 +160,31 @@ export interface AllocationResult {
   timestamp: string;
 }
 
+export interface AllocationRunRecord {
+  id?: string;
+  method: AllocationMethod;
+  result: AllocationResult;
+  triggeredBy?: string;
+  status: 'SUCCESS' | 'FAILED';
+  createdAt?: string;
+}
+
 // Recovery & Disruption Domain Contracts
 export interface DisruptionEvent {
   roomId: string;
   slot?: TimeSlot;
   reason: string;
+}
+
+export interface RoomClosure {
+  id?: string;
+  roomId: string;
+  reason: string;
+  closedBy?: string;
+  slot?: TimeSlot;
+  status: 'ACTIVE' | 'RESOLVED';
+  createdAt?: string;
+  resolvedAt?: string;
 }
 
 export interface RecoveryReport {
