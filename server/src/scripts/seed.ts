@@ -16,6 +16,13 @@ export async function runSeed(isStandalone = true): Promise<void> {
   console.log('  RoomWise Repeatable Development Database Seeder   ');
   console.log('----------------------------------------------------');
 
+  if (env.NODE_ENV !== 'development') {
+    throw new Error('Database seeding is allowed only when NODE_ENV=development.');
+  }
+  if (process.env.ALLOW_DESTRUCTIVE_SEED !== 'true') {
+    throw new Error('This seed script clears existing collections. Set ALLOW_DESTRUCTIVE_SEED=true only when you intend to reset the development database.');
+  }
+
   if (mongoose.connection.readyState === 0) {
     console.log(`Connecting to MongoDB at: ${env.MONGODB_URI}...`);
     await mongoose.connect(env.MONGODB_URI);
