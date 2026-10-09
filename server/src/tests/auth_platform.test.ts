@@ -36,6 +36,28 @@ test('M1: Platform, Authentication, RBAC and Session Suite', async (t) => {
     assert.ok(body.timestamp);
   });
 
+  await t.test('POST /auth/login: requires a password', async () => {
+    const res = await fetch(`${baseUrl}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'admin@campus.edu' }),
+    });
+    assert.equal(res.status, 400);
+    const body = (await res.json()) as any;
+    assert.equal(body.error.code, 'VALIDATION_ERROR');
+  });
+
+  await t.test('POST /auth/login: rejects a browser-supplied role', async () => {
+    const res = await fetch(`${baseUrl}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'admin@campus.edu', password: 'DemoPass2026!', role: 'SYSTEM_ADMIN' }),
+    });
+    assert.equal(res.status, 400);
+    const body = (await res.json()) as any;
+    assert.equal(body.error.code, 'VALIDATION_ERROR');
+  });
+
   await t.test('POST /auth/login: rejects unregistered non-demo email with 401 INVALID_CREDENTIALS', async () => {
     const res = await fetch(`${baseUrl}/auth/login`, {
       method: 'POST',
@@ -118,8 +140,10 @@ test('M1: Platform, Authentication, RBAC and Session Suite', async (t) => {
   });
 
   await t.test('POST /auth/logout: returns 200 acknowledging session termination', async () => {
+    const token = makeValidToken('SYSTEM_ADMIN');
     const res = await fetch(`${baseUrl}/auth/logout`, {
       method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
     });
 
     assert.equal(res.status, 200);
