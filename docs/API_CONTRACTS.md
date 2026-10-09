@@ -56,8 +56,7 @@ All endpoints return a uniform JSON response structure.
     ```json
     {
       "email": "admin@campus.edu",
-      "password": "DemoPass2026!",
-      "role": "SYSTEM_ADMIN"
+      "password": "DemoPass2026!"
     }
     ```
   * **Returns (`200 OK`):** `ApiSuccess<{ user: User, token: string }>` with signed JWT Bearer token and sanitized user details.
@@ -65,9 +64,9 @@ All endpoints return a uniform JSON response structure.
     * `400 Bad Request`: Validation failure on malformed email.
     * `401 Unauthorized`: Invalid email or incorrect password (`INVALID_CREDENTIALS`).
 * `POST /api/v1/auth/logout`
-  * **Access:** Public / Authenticated
+  * **Access:** Authenticated (`Authorization: Bearer <jwt_token>`)
   * **Body:** None
-  * **Returns (`200 OK`):** `ApiSuccess<null>` confirming user session termination.
+  * **Returns (`200 OK`):** `ApiSuccess<null>` acknowledging logout. The client must discard its stored token; a stateless JWT remains valid until expiry.
 * `GET /api/v1/auth/me`
   * **Access:** Authenticated (`Authorization: Bearer <jwt_token>`)
   * **Returns (`200 OK`):** `ApiSuccess<{ user: User }>` containing verified user session and role.
