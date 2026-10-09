@@ -7,16 +7,18 @@ import { mockRooms, mockBookingRequests } from '../fixtures/sharedFixtures.js';
 import { DisruptionEvent } from '../../../shared/types/index.js';
 
 describe('Shared Service Boundaries & Contract Conformance Tests', () => {
-  it('AllocationService satisfies IAllocationService and reports Phase 1 status on main', async () => {
+  it('AllocationService satisfies IAllocationService and runs First-Fit and Heuristic allocations', async () => {
     expect(typeof allocationService.runAllocation).toBe('function');
 
-    await expect(
-      allocationService.runAllocation(mockBookingRequests, mockRooms, 'FIRST_FIT')
-    ).rejects.toThrow(/AllocationService logic for 'FIRST_FIT' not implemented in Phase 1 foundation/);
+    const firstFitResult = await allocationService.runAllocation(mockBookingRequests, mockRooms, 'FIRST_FIT', { saveRecord: false });
+    expect(firstFitResult.method).toBe('FIRST_FIT');
+    expect(firstFitResult.validation).toBeDefined();
+    expect(firstFitResult.validation?.isValid).toBe(true);
 
-    await expect(
-      allocationService.runAllocation(mockBookingRequests, mockRooms, 'HEURISTIC')
-    ).rejects.toThrow(/AllocationService logic for 'HEURISTIC' not implemented in Phase 1 foundation/);
+    const heuristicResult = await allocationService.runAllocation(mockBookingRequests, mockRooms, 'HEURISTIC', { saveRecord: false });
+    expect(heuristicResult.method).toBe('HEURISTIC');
+    expect(heuristicResult.validation).toBeDefined();
+    expect(heuristicResult.validation?.isValid).toBe(true);
   });
 
   it('RecoveryService satisfies IRecoveryService and reports Phase 1 status on main', async () => {
