@@ -6,7 +6,26 @@ import { errorHandler, AppError } from './middleware/errorHandler.js';
 
 const app = express();
 
-app.use(cors({ origin: env.CLIENT_URL, credentials: true }));
+const defaultAllowedOrigins = [
+  'http://localhost:5173',
+  'https://roompilot-omega.vercel.app',
+];
+
+const envOrigins = env.CLIENT_URL
+  ? env.CLIENT_URL.split(',').map((url) => url.trim()).filter(Boolean)
+  : [];
+
+const allowedOrigins = Array.from(new Set([...defaultAllowedOrigins, ...envOrigins]));
+
+app.use(
+  cors({
+    origin: allowedOrigins,
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    optionsSuccessStatus: 200,
+  })
+);
 app.use(express.json());
 
 // API Routes
