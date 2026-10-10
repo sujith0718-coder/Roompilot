@@ -3,7 +3,56 @@
 @tailwind utilities;
 
 @layer base {
-  body {
-    @apply bg-slate-950 text-slate-100 font-sans selection:bg-cyan-500 selection:text-slate-950;
+  :root {
+    --color-bg-dark: #070a12;
+    --color-surface-navy: #0c1220;
+    --color-surface-card: #111827;
+    --color-border-subtle: rgba(255, 255, 255, 0.08);
   }
+
+  body {
+    @apply bg-[#070a12] text-slate-100 font-sans selection:bg-cyan-500 selection:text-slate-950 antialiased min-h-screen overflow-x-hidden;
+  }
+
+  /* Custom Sleek Dark Scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: #090d16;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #1e293b;
+    border-radius: 9999px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #334155;
+  }
+}
+
+@layer utilities {
+  .glass-card {
+    @apply bg-slate-900/60 backdrop-blur-md border border-slate-800/80 shadow-xl shadow-slate-950/40;
+  }
+  
+  .glass-card-hover {
+    @apply hover:border-slate-700/80 hover:bg-slate-900/80 transition-all duration-200;
+  }
+
+  .accent-glow {
+    @apply shadow-lg shadow-cyan-500/10 border-cyan-500/30;
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }

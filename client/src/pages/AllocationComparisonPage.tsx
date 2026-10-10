@@ -62,18 +62,19 @@ export const AllocationComparisonPage: React.FC = () => {
   const isAuthorizedToRun = ['SYSTEM_ADMIN', 'HOD', 'COE', 'PRINCIPAL'].includes(role);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 animate-fade-in">
       <PageHeader
-        title="Baseline vs Improved Allocation Comparison"
-        description="Comparative analysis between baseline First-Fit assignment algorithm and improved Heuristic algorithm."
-        badge="Algorithmic Metrics"
+        breadcrumbs={['Operations', 'Algorithmic Comparison']}
+        title="Baseline vs Heuristic Allocation Benchmark"
+        description="Comparative analytics evaluating baseline First-Fit assignment against the constrained-first Heuristic algorithm. Evaluates capacity waste, assignment throughput, and execution latency."
+        badge="Performance Analytics"
         action={
           isAuthorizedToRun ? (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2.5">
               <button
                 onClick={() => handleRunAllocation('FIRST_FIT')}
                 disabled={isRunningAllocation}
-                className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-mono font-semibold transition-colors flex items-center gap-1.5"
+                className="px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-mono font-semibold transition-all border border-slate-700 flex items-center gap-1.5 disabled:opacity-50"
               >
                 <Play className="w-3.5 h-3.5 text-slate-400" />
                 <span>Run First-Fit</span>
@@ -81,147 +82,144 @@ export const AllocationComparisonPage: React.FC = () => {
               <button
                 onClick={() => handleRunAllocation('HEURISTIC')}
                 disabled={isRunningAllocation}
-                className="px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white text-xs font-mono font-bold tracking-wider shadow-lg shadow-cyan-500/20 transition-all flex items-center gap-1.5"
+                className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white text-xs font-mono font-bold tracking-wider shadow-lg shadow-cyan-500/20 transition-all flex items-center gap-2 disabled:opacity-50 hover:scale-105 active:scale-95"
               >
-                <Zap className="w-3.5 h-3.5" />
-                <span>Run Heuristic</span>
+                <Zap className="w-4 h-4 text-white" />
+                <span>Execute Heuristic</span>
               </button>
             </div>
           ) : undefined
         }
       />
 
-      {error && <AlertBanner type="error" title="Error" message={error} />}
+      {error && <AlertBanner type="error" title="Error" message={error} onClose={() => setError(null)} />}
 
       {lastRunResult && (
         <AlertBanner
           type="success"
-          title={`Allocation Run Complete (${lastRunResult.method})`}
-          message={`Assigned ${lastRunResult.metrics.assignedCount} of ${lastRunResult.metrics.totalRequested} requests in ${lastRunResult.metrics.executionTimeMs}ms with ${lastRunResult.metrics.capacityWasteAverage} avg wasted capacity seats.`}
-          onClose={() => setLastRunResult(null)}
+          title={`Allocation Engine Run Succeeded (${lastRunResult.method})`}
+          message={`Assigned ${lastRunResult.metrics.assignedCount} of ${lastRunResult.metrics.totalRequested} requests in ${lastRunResult.metrics.executionTimeMs}ms. Average capacity waste: ${lastRunResult.metrics.capacityWasteAverage} seats per assignment.`}
         />
       )}
 
       {isLoading ? (
-        <LoadingSpinner label="Computing comparative metrics..." />
+        <LoadingSpinner label="Computing Algorithmic Comparison Metrics..." />
       ) : metrics ? (
         <>
-          {/* Comparison Stats Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Top Level Metric Summary Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <StatCard
-              title="First-Fit Assignment Rate"
-              value={`${Math.round((metrics.firstFit.assignedCount / (metrics.firstFit.totalRequested || 1)) * 100)}%`}
-              subtext={`${metrics.firstFit.assignedCount} of ${metrics.firstFit.totalRequested} assigned`}
+              title="First-Fit Assigned Rate"
+              value={`${Math.round(
+                (metrics.firstFit.assignedCount / (metrics.firstFit.totalRequested || 1)) * 100
+              )}%`}
+              subtext={`${metrics.firstFit.assignedCount} of ${metrics.firstFit.totalRequested} requests`}
               icon={BarChart3}
-              color="amber"
+              color="indigo"
             />
             <StatCard
-              title="Heuristic Assignment Rate"
-              value={`${Math.round((metrics.heuristic.assignedCount / (metrics.heuristic.totalRequested || 1)) * 100)}%`}
-              subtext={`${metrics.heuristic.assignedCount} of ${metrics.heuristic.totalRequested} assigned`}
+              title="Heuristic Assigned Rate"
+              value={`${Math.round(
+                (metrics.heuristic.assignedCount / (metrics.heuristic.totalRequested || 1)) * 100
+              )}%`}
+              subtext={`${metrics.heuristic.assignedCount} of ${metrics.heuristic.totalRequested} requests`}
               icon={Zap}
+              trend={{
+                value: `+${metrics.improvementPercentage.capacityEfficiency}% Waste Reduced`,
+                isPositive: true,
+              }}
               color="emerald"
-              trend={{ value: `+${metrics.heuristic.assignedCount - metrics.firstFit.assignedCount} More Booked`, isPositive: true }}
             />
             <StatCard
-              title="Capacity Waste Reduction"
-              value={`${metrics.improvementPercentage.capacityEfficiency}%`}
-              subtext={`Heuristic: ${metrics.heuristic.capacityWasteAverage} seats vs First-Fit: ${metrics.firstFit.capacityWasteAverage} seats`}
+              title="Capacity Waste Avg"
+              value={`${metrics.heuristic.capacityWasteAverage} seats`}
+              subtext={`Baseline First-Fit: ${metrics.firstFit.capacityWasteAverage} seats`}
               icon={TrendingUp}
               color="cyan"
-              trend={{ value: 'More Efficient', isPositive: true }}
             />
             <StatCard
               title="Execution Latency"
               value={`${metrics.heuristic.executionTimeMs} ms`}
-              subtext={`First-Fit: ${metrics.firstFit.executionTimeMs} ms`}
+              subtext={`Baseline First-Fit: ${metrics.firstFit.executionTimeMs} ms`}
               icon={Cpu}
               color="purple"
             />
           </div>
 
-          {/* Side-by-Side Detailed Breakdown */}
+          {/* Side-by-Side Comparison Graphs & Detail Cards */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* First-Fit Card */}
-            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-5">
-              <div className="flex items-center justify-between pb-4 border-b border-slate-800">
-                <div className="flex items-center gap-3">
-                  <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-400">
+            <div className="p-6 bg-slate-900/80 backdrop-blur-md border border-slate-800/80 rounded-3xl space-y-5 shadow-xl">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
                     <BarChart3 className="w-5 h-5" />
                   </div>
                   <div>
-                    <h3 className="text-base font-bold text-white">Baseline — First-Fit Engine</h3>
-                    <p className="text-xs text-slate-400">Standard Sequential Greedy Matching</p>
+                    <h3 className="text-base font-bold text-white font-sans">Baseline: First-Fit Algorithm</h3>
+                    <p className="text-xs text-slate-400 font-mono">Greedy first-available room assignment</p>
                   </div>
                 </div>
-                <span className="px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30 text-xs font-mono font-semibold">
+                <span className="px-2.5 py-1 rounded-full bg-slate-800 text-slate-300 font-mono text-xs border border-slate-700">
                   Baseline
                 </span>
               </div>
 
               <div className="space-y-3 font-mono text-xs">
-                <div className="flex justify-between p-3 bg-slate-950 rounded-xl border border-slate-800">
-                  <span className="text-slate-400">Assigned Requests:</span>
-                  <span className="text-slate-200 font-bold">{metrics.firstFit.assignedCount}</span>
+                <div className="flex justify-between p-3 bg-slate-950/80 rounded-xl border border-slate-800">
+                  <span className="text-slate-400">Total Requested:</span>
+                  <span className="text-slate-200">{metrics.firstFit.totalRequested}</span>
                 </div>
-                <div className="flex justify-between p-3 bg-slate-950 rounded-xl border border-slate-800">
-                  <span className="text-slate-400">Unassigned Requests:</span>
-                  <span className="text-rose-400 font-bold">{metrics.firstFit.unassignedCount}</span>
+                <div className="flex justify-between p-3 bg-slate-950/80 rounded-xl border border-slate-800">
+                  <span className="text-slate-400">Assigned Count:</span>
+                  <span className="text-emerald-400 font-bold">{metrics.firstFit.assignedCount}</span>
                 </div>
-                <div className="flex justify-between p-3 bg-slate-950 rounded-xl border border-slate-800">
-                  <span className="text-slate-400">Avg Capacity Waste (Seats):</span>
-                  <span className="text-amber-400 font-bold">{metrics.firstFit.capacityWasteAverage}</span>
+                <div className="flex justify-between p-3 bg-slate-950/80 rounded-xl border border-slate-800">
+                  <span className="text-slate-400">Unassigned Count:</span>
+                  <span className="text-amber-400 font-bold">{metrics.firstFit.unassignedCount}</span>
                 </div>
-                <div className="flex justify-between p-3 bg-slate-950 rounded-xl border border-slate-800">
-                  <span className="text-slate-400">Execution Speed:</span>
-                  <span className="text-slate-200 font-bold">{metrics.firstFit.executionTimeMs} ms</span>
+                <div className="flex justify-between p-3 bg-slate-950/80 rounded-xl border border-slate-800">
+                  <span className="text-slate-400">Avg Seat Waste per Room:</span>
+                  <span className="text-rose-400 font-bold">{metrics.firstFit.capacityWasteAverage} seats</span>
                 </div>
               </div>
-
-              <p className="text-xs text-slate-400 leading-relaxed pt-2 border-t border-slate-800">
-                First-Fit assigns the first available room satisfying hard capacity and facility constraints, often leading to seat fragmentation in large lecture halls.
-              </p>
             </div>
 
-            {/* Improved Heuristic Card */}
-            <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-cyan-950/40 border border-cyan-500/30 rounded-3xl p-6 shadow-2xl space-y-5 relative overflow-hidden">
-              <div className="flex items-center justify-between pb-4 border-b border-slate-800">
-                <div className="flex items-center gap-3">
-                  <div className="p-2.5 rounded-xl bg-cyan-500/10 text-cyan-400">
+            {/* Heuristic Card */}
+            <div className="p-6 bg-slate-900/80 backdrop-blur-md border border-cyan-500/30 rounded-3xl space-y-5 shadow-xl shadow-cyan-950/20">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/30">
                     <Zap className="w-5 h-5" />
                   </div>
                   <div>
-                    <h3 className="text-base font-bold text-white">Improved — Heuristic Engine</h3>
-                    <p className="text-xs text-cyan-400">Tightest-Fit Capacity & Facility Scoring</p>
+                    <h3 className="text-base font-bold text-white font-sans">Optimized: Constrained Heuristic</h3>
+                    <p className="text-xs text-slate-400 font-mono">Most-constrained occurrence prioritization</p>
                   </div>
                 </div>
-                <span className="px-2.5 py-1 rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 text-xs font-mono font-semibold">
-                  Improved
+                <span className="px-2.5 py-1 rounded-full bg-cyan-500/10 text-cyan-300 font-mono text-xs border border-cyan-500/30 font-bold">
+                  Recommended
                 </span>
               </div>
 
               <div className="space-y-3 font-mono text-xs">
-                <div className="flex justify-between p-3 bg-slate-950/90 rounded-xl border border-slate-800">
-                  <span className="text-slate-400">Assigned Requests:</span>
+                <div className="flex justify-between p-3 bg-slate-950/80 rounded-xl border border-slate-800">
+                  <span className="text-slate-400">Total Requested:</span>
+                  <span className="text-slate-200">{metrics.heuristic.totalRequested}</span>
+                </div>
+                <div className="flex justify-between p-3 bg-slate-950/80 rounded-xl border border-slate-800">
+                  <span className="text-slate-400">Assigned Count:</span>
                   <span className="text-emerald-400 font-bold">{metrics.heuristic.assignedCount}</span>
                 </div>
-                <div className="flex justify-between p-3 bg-slate-950/90 rounded-xl border border-slate-800">
-                  <span className="text-slate-400">Unassigned Requests:</span>
+                <div className="flex justify-between p-3 bg-slate-950/80 rounded-xl border border-slate-800">
+                  <span className="text-slate-400">Unassigned Count:</span>
                   <span className="text-cyan-400 font-bold">{metrics.heuristic.unassignedCount}</span>
                 </div>
-                <div className="flex justify-between p-3 bg-slate-950/90 rounded-xl border border-slate-800">
-                  <span className="text-slate-400">Avg Capacity Waste (Seats):</span>
-                  <span className="text-emerald-400 font-bold">{metrics.heuristic.capacityWasteAverage}</span>
-                </div>
-                <div className="flex justify-between p-3 bg-slate-950/90 rounded-xl border border-slate-800">
-                  <span className="text-slate-400">Execution Speed:</span>
-                  <span className="text-slate-200 font-bold">{metrics.heuristic.executionTimeMs} ms</span>
+                <div className="flex justify-between p-3 bg-slate-950/80 rounded-xl border border-slate-800">
+                  <span className="text-slate-400">Avg Seat Waste per Room:</span>
+                  <span className="text-emerald-400 font-bold">{metrics.heuristic.capacityWasteAverage} seats</span>
                 </div>
               </div>
-
-              <p className="text-xs text-slate-300 leading-relaxed pt-2 border-t border-slate-800">
-                Heuristic engine sorts bookings by attendance size and pairs them with the tightest matching room capacity, minimizing wasted seats and maximizing total campus throughput.
-              </p>
             </div>
           </div>
         </>

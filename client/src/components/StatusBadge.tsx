@@ -3,6 +3,7 @@ import { BookingStatus, UserRole, Facility, AllocationMethod } from '../types';
 
 interface StatusBadgeProps {
   status?: BookingStatus | string;
+  roomStatus?: 'AVAILABLE' | 'BLOCKED';
   role?: UserRole;
   facility?: Facility;
   method?: AllocationMethod;
@@ -12,13 +13,14 @@ interface StatusBadgeProps {
 
 export const StatusBadge: React.FC<StatusBadgeProps> = ({
   status,
+  roomStatus,
   role,
   facility,
   method,
   variant,
   size = 'sm',
 }) => {
-  let label = status || role || facility || method || '';
+  let label = status || roomStatus || role || facility || method || '';
   let colorStyle = 'bg-slate-800 text-slate-300 border-slate-700';
 
   if (role) {
@@ -33,8 +35,9 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
       case 'STUDENT_REP': colorStyle = 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'; break;
       case 'TUTOR': colorStyle = 'bg-blue-500/10 text-blue-400 border-blue-500/30'; break;
     }
-  } else if (status) {
-    switch (status) {
+  } else if (status || roomStatus) {
+    const activeStatus = status || roomStatus;
+    switch (activeStatus) {
       case 'ALLOCATED':
       case 'APPROVED':
       case 'AVAILABLE':
