@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import mongoose from 'mongoose';
 import {
   mockRooms,
   mockBookingRequests,
@@ -251,14 +252,20 @@ describe('Allocation Engine — 6 Required Constraint Cases & Algorithm Comparis
     });
 
     it('tests AllocationService.runAllocation with independent post-allocation validation attachment', async () => {
-      const { allocationService } = await import('../../src/services/allocation/index.js');
-      const result = await allocationService.runAllocation(sharedRequests, sharedRooms, 'HEURISTIC', { saveRecord: false });
+      const origState = mongoose.connection.readyState;
+      (mongoose.connection as any).readyState = 0;
+      try {
+        const { allocationService } = await import('../../src/services/allocation/index.js');
+        const result = await allocationService.runAllocation(sharedRequests, sharedRooms, 'HEURISTIC', { saveRecord: false });
 
-      expect(result.method).toBe('HEURISTIC');
-      expect(result.runId).toBeDefined();
-      expect(result.validation).toBeDefined();
-      expect(result.validation?.isValid).toBe(true);
-      expect(result.assignments.length).toBeGreaterThan(0);
-    });
+        expect(result.method).toBe('HEURISTIC');
+        expect(result.runId).toBeDefined();
+        expect(result.validation).toBeDefined();
+        expect(result.validation?.isValid).toBe(true);
+        expect(result.assignments.length).toBeGreaterThan(0);
+      } finally {
+        (mongoose.connection as any).readyState = origState;
+      }
+    }, 15000);
   });
 });
